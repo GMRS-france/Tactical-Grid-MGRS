@@ -15,13 +15,13 @@
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
         #map { width: 100%; height: 100%; transition: filter 0.3s ease; }
         
-        /* Panneau d'état tactique (Style par défaut : Vert/Noir) */
+        /* Panneau d'état en haut à droite */
         #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 12px; border-radius: 8px; border: 1px solid #0f0; max-width: 90%; font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         #search-container { margin-top: 8px; display: flex; gap: 5px; }
         #search-input { background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px; border-radius: 4px; font-size: 12px; width: 160px; outline: none; text-transform: uppercase; }
         #search-btn { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
         
-        /* Boutons flottants */
+        /* Boutons flottants en bas à droite */
         #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 65px; height: 65px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
         #btn-night { position: absolute; bottom: 110px; right: 20px; z-index: 1000; width: 50px; height: 50px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 22px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
         .btn-copy { background: #0f0; color: #000; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; }
@@ -33,7 +33,6 @@
         body.night-mode #btn-pos { background: #f00; color: #fff; }
         body.night-mode #btn-night { background: #f00; color: #fff; }
         body.night-mode .btn-copy { background: #f00; color: #fff; }
-        /* Filtre de assombrissement/inversion pour la carte de nuit */
         body.night-mode #map { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(180deg); }
     </style>
 </head>
@@ -47,7 +46,7 @@
     </div>
     
     <div id="map"></div>
-    <button id="night-btn" id="btn-night" onclick="basculerModeNuit()">🌙</button>
+    <button id="btn-night" onclick="basculerModeNuit()">🌙</button>
     <button id="btn-pos" onclick="centrerSurGPS()">🎯</button>
 
     <!-- Leaflet JS -->
@@ -183,11 +182,10 @@
             });
         }
 
-        // Fonction pour basculer le mode nuit
         function basculerModeNuit() {
             isNightMode = !isNightMode;
             document.body.classList.toggle('night-mode', isNightMode);
-            const btnNight = document.getElementById('night-btn');
+            const btnNight = document.getElementById('btn-night');
             btnNight.innerText = isNightMode ? "☀️" : "🌙";
         }
 
@@ -227,7 +225,6 @@
         }
 
         function copierTexte(texte) {
-            navigator.clipboard.writeText(texte).text.then(() => {}).catch(() => {});
             navigator.clipboard.writeText(texte).then(() => {
                 alert("Coordonnées copiées : " + texte);
             }).catch(() => {
