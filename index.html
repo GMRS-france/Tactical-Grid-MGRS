@@ -3,147 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tactical Grid MGRS</title>
+    <title>Tactical Grid MGRS France</title>
     <link rel="icon" type="image/png" href="icon.png">
-    
-    <!-- Leaflet CSS -->
+    <!-- Leaflet et MGRS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <!-- Librairie de conversion MGRS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mgrs/1.0.0/mgrs.min.js"></script>
-    
     <style>
-        html, body {
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-        }
-        #map {
-            width: 100%;
-            height: 100%;
-        }
-        #status-container {
-            position: absolute;
-            top: 15px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            background: rgba(20, 20, 20, 0.85);
-            color: #00ff66;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            border: 1px solid #00ff66;
-            text-align: center;
-            max-width: 90%;
-        }
-        #btn-pos {
-            position: absolute;
-            bottom: 30px;
-            right: 20px;
-            z-index: 1000;
-            background-color: #00ff66;
-            color: #000;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 30px;
-            font-weight: bold;
-            font-size: 14px;
-            cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        }
-        #btn-pos:active {
-            background-color: #00cc52;
-        }
+        html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
+        #map { width: 100%; height: 100%; }
+        #status-container { position: absolute; top: 10px; left: 10px; z-index: 1000; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; border-radius: 5px; border: 1px solid #0f0; }
+        #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; padding: 15px; background: #0f0; border-radius: 50%; border: none; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
-
-    <div id="status-container">
-        <div id="status">GPS en attente de précision...</div>
-    </div>
-
+    <div id="status-container"><div id="status">Chargement...</div></div>
     <div id="map"></div>
+    <button id="btn-pos" onclick="maPosition()">🎯</button>
 
-    <button id="btn-pos" onclick="maPosition()">🎯 Ma position</button>
-
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
     <script>
-        const map = L.map('map').setView([48.442, -4.534], 14);
-
+        const map = L.map('map').setView([46.5, 2.5], 6); // Vue centrée sur la France
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; OpenStreetMap contributors'
+            maxZoom: 18,
+            attribution: 'Map data © OpenStreetMap'
         }).addTo(map);
 
-        let marker = null;
-        let circle = null;
+        // Service Worker pour le mode Hors-Ligne
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(() => console.log('Mode Hors-Ligne activé'));
+        }
 
+        let marker, circle;
         function onPositionSuccess(position) {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            const accuracy = position.coords.accuracy;
-
-            let mgrsCoord = "Calcul MGRS...";
-            try {
-                if (typeof mgrs !== 'undefined') {
-                    mgrsCoord = mgrs.forward([lng, lat], 5);
-                } else {
-                    mgrsCoord = "Erreur lib MGRS";
-                }
-            } catch (e) {
-                mgrsCoord = "Erreur conversion";
-                console.error(e);
-            }
-
-            if (marker) {
-                map.removeLayer(marker);
-                map.removeLayer(circle);
-            }
-
-            marker = L.marker([lat, lng]).addTo(map)
-                .bindPopup(`<b>Position Actuelle</b><br>MGRS : <b>${mgrsCoord}</b><br>Précision : ±${Math.round(accuracy)}m`)
-                .openPopup();
-
-            circle = L.circle([lat, lng], {
-                radius: accuracy,
-                color: '#3388ff',
-                fillColor: '#3388ff',
-                fillOpacity: 0.2
-            }).addTo(map);
-
-            map.setView([lat, lng], 17);
-
-            document.getElementById('status').innerHTML = `📍 MGRS : ${mgrsCoord} <br><span style="font-size:11px; color:#ccc;">Précision : ±${Math.round(accuracy)}m</span>`;
+            const { latitude: lat, longitude: lng, accuracy } = position.coords;
+            const mgrsCoord = mgrs.forward([lng, lat], 5);
+            
+            if (marker) { map.removeLayer(marker); map.removeLayer(circle); }
+            marker = L.marker([lat, lng]).addTo(map).bindPopup("MGRS: " + mgrsCoord).openPopup();
+            circle = L.circle([lat, lng], { radius: accuracy }).addTo(map);
+            map.setView([lat, lng], 16);
+            document.getElementById('status').innerHTML = `📍 ${mgrsCoord}<br>Précision: ${Math.round(accuracy)}m`;
         }
-
-        function onPositionError(error) {
-            document.getElementById('status').innerText = "Erreur GPS : " + error.message;
-        }
-
-        function maPosition() {
-            document.getElementById('status').innerText = "Recherche du signal haute précision...";
-            if (!navigator.geolocation) {
-                alert("La géolocalisation n'est pas supportée.");
-                return;
-            }
-
-            navigator.geolocation.getCurrentPosition(onPositionSuccess, onPositionError, {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 0
-            });
-        }
-
-        window.onload = function() {
-            maPosition();
-        };
+        function maPosition() { navigator.geolocation.getCurrentPosition(onPositionSuccess, () => alert("GPS requis"), {enableHighAccuracy: true}); }
+        window.onload = maPosition;
     </script>
 </body>
 </html>
