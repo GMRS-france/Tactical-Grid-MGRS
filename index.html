@@ -19,17 +19,21 @@
 <body>
     <div id="status-container"><div id="status">Acquisition GPS...</div></div>
     <div id="map"></div>
-    <button id="btn-pos" onclick="lancerProcessusTactique()">🎯</button>
+    <button id="btn-pos" onclick="centrerSurGPS()">🎯</button>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         let map = null;
-        let marker = null;
+        let userMarker = null;
         let circle = null;
-        let clickMarker = null;
-        let line = null;
-        let userPos = null;
+        
+        // Variables pour la mesure A -> B
+        let pointA = null;
+        let pointB = null;
+        let markerA = null;
+        let markerB = null;
+        let lineAB = null;
 
         // Fonction pour calculer l'azimut en millièmes d'artillerie (6400 mil = 360°)
         function calculerAzimutMilliemes(lat1, lon1, lat2, lon2) {
@@ -53,11 +57,9 @@
             return azimutMil;
         }
 
-        function lancerProcessusTactique() {
-            document.getElementById('status').innerText = "Recherche de la position GPS...";
-
+        function initialiserCarte() {
             if (!navigator.geolocation) {
-                alert("La géolocalisation n'est pas supportée par votre appareil.");
+                alert("La géolocalisation n'est pas supportée.");
                 return;
             }
 
@@ -65,8 +67,6 @@
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
                 const accuracy = position.coords.accuracy;
-
-                userPos = [lat, lng];
 
                 let mgrsCoord = "";
                 try {
@@ -82,6 +82,7 @@
                         attribution: 'Map data © OpenStreetMap'
                     }).addTo(map);
 
+                    // Gestionnaire de clics pour les mesures libres Point A -> Point B
                     map.on('click', function(e) {
                         const clickLat = e.latlng.lat;
                         const clickLng = e.latlng.lng;
@@ -93,47 +94,63 @@
                             clickMgrs = `Lat: ${clickLat.toFixed(5)}, Lon: ${clickLng.toFixed(5)}`;
                         }
 
-                        if (clickMarker) map.removeLayer(clickMarker);
-                        if (line) map.removeLayer(line);
+                        // Si on n'a pas de Point A, ou si A et B sont déjà définis, on réinitialise pour poser un nouveau Point A
+                        if (!pointA || (pointA && pointB)) {
+                            if (markerA) map.removeLayer(markerA);
+                            if (markerB) map.removeLayer(markerB);
+                            if (lineAB) map.removeLayer(lineAB);
+                            
+                            pointB = null;
+                            pointA = [clickLat, clickLng];
 
-                        let tacticalInfo = "";
-                        if (userPos) {
-                            const distanceMeters = map.distance(userPos, [clickLat, clickLng]);
+                            markerA = L.marker(pointA).addTo(map)
+                                .bindPopup(`<b>Point A (Origine)</b><br>MGRS: ${clickMgrs}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`)
+                                .openPopup();
+
+                            document.getElementById('status').innerHTML = `📍 <b>Point A défini : ${clickMgrs}</b><br><span style="color:#ff0;">Cliquez pour poser le Point B (Cible)</span>`;
+                        
+                        } else {
+                            // On a déjà un Point A, ce clic définit le Point B
+                            pointB = [clickLat, clickLng];
+
+                            markerB = L.marker(pointB).addTo(map)
+                                .bindPopup(`<b>Point B (Cible)</b><br>MGRS: ${clickMgrs}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`)
+                                .openPopup();
+
+                            // Calculs de distance et d'azimut entre A et B
+                            const distanceMeters = map.distance(pointA, pointB);
                             let distanceStr = distanceMeters >= 1000 ? 
                                 `${(distanceMeters / 1000).toFixed(2)} km` : 
                                 `${Math.round(distanceMeters)} m`;
 
-                            const azimutMil = calculerAzimutMilliemes(userPos[0], userPos[1], clickLat, clickLng);
+                            const azimutMil = calculerAzimutMilliemes(pointA[0], pointA[1], pointB[0], pointB[1]);
 
-                            tacticalInfo = `<br><b>Distance :</b> ${distanceStr}<br><b>Cap :</b> ${azimutMil} mil`;
-
-                            line = L.polyline([userPos, [clickLat, clickLng]], {
+                            // Tracé de la ligne entre A et B
+                            lineAB = L.polyline([pointA, pointB], {
                                 color: '#ff0',
                                 weight: 3,
                                 dashArray: '5, 5'
                             }).addTo(map);
+
+                            const tacticalInfo = `<br><b>Distance A-B :</b> ${distanceStr}<br><b>Cap :</b> ${azimutMil} mil`;
+                            
+                            markerB.setPopupContent(`<b>Point B (Cible)</b><br>${clickMgrs}${tacticalInfo}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`);
+                            markerB.openPopup();
+
+                            document.getElementById('status').innerHTML = `🎯 <b>A ➔ B : ${distanceStr} | Cap : ${azimutMil} mil</b>`;
                         }
-
-                        clickMarker = L.marker([clickLat, clickLng]).addTo(map)
-                            .bindPopup(`<b>Cible</b><br>${clickMgrs}${tacticalInfo}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`)
-                            .openPopup();
-
-                        document.getElementById('status').innerHTML = `🎯 <b>Cible : ${clickMgrs}</b>${tacticalInfo}`;
                     });
-
-                } else {
-                    map.setView([lat, lng], 17);
                 }
 
-                if (marker) {
-                    map.removeLayer(marker);
+                if (userMarker) {
+                    map.removeLayer(userMarker);
                     map.removeLayer(circle);
                 }
 
-                marker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Position Tactique</b><br>MGRS: ${mgrsCoord}<br><button class="btn-copy" onclick="copierTexte('${mgrsCoord}')">Copier MGRS</button>`).openPopup();
-                circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.2 }).addTo(map);
+                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position GPS</b><br>MGRS: ${mgrsCoord}`).openPopup();
+                circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
 
-                document.getElementById('status').innerHTML = `📍 <b>${mgrsCoord}</b><br><span style="color:#ccc; font-size:12px;">Précision GPS : ±${Math.round(accuracy)}m</span>`;
+                document.getElementById('status').innerHTML = `📍 <b>GPS : ${mgrsCoord}</b><br><span style="color:#ccc; font-size:12px;">Cliquez deux fois sur la carte pour mesurer A ➔ B</span>`;
 
             }, error => {
                 document.getElementById('status').innerHTML = `<span style="color:#ff5555;">Erreur GPS : Activez la localisation.</span>`;
@@ -141,6 +158,12 @@
                 enableHighAccuracy: true,
                 timeout: 10000,
                 maximumAge: 0
+            });
+        }
+
+        function centrerSurGPS() {
+            navigator.geolocation.getCurrentPosition(pos => {
+                map.setView([pos.coords.latitude, pos.coords.longitude], 17);
             });
         }
 
@@ -152,9 +175,7 @@
             });
         }
 
-        window.onload = function() {
-            lancerProcessusTactique();
-        };
+        window.onload = initialiserCarte;
     </script>
 </body>
 </html>
