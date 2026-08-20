@@ -6,7 +6,7 @@
     <title>Tactical Grid MGRS France</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- MGRS Conversion Library -->
+    <!-- MGRS Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mgrs/1.0.0/mgrs.min.js"></script>
     <style>
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
@@ -16,20 +16,17 @@
     </style>
 </head>
 <body>
-    <div id="status-container"><div id="status">Acquisition de la position haute précision...</div></div>
+    <div id="status-container"><div id="status">Calcul de la grille MGRS...</div></div>
     <div id="map"></div>
     <button id="btn-pos" onclick="maPosition()">🎯</button>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Initialisation de la carte
         const map = L.map('map').setView([46.5, 2.5], 6);
         
-        // Couche de tuiles OpenStreetMap haute résolution
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            maxNativeZoom: 19,
             attribution: 'Map data © OpenStreetMap'
         }).addTo(map);
 
@@ -37,26 +34,20 @@
 
         function onPositionSuccess(position) {
             const { latitude, longitude, accuracy } = position.coords;
-            let mgrsCoord = "Erreur conversion";
+            let mgrsCoord = "";
             
             try {
-                // Conversion MGRS haute précision (5 = précision au mètre près)
-                mgrsCoord = mgrs.forward([longitude, latitude], 5);
+                // Test de conversion standard MGRS (longitude d'abord, puis latitude)
+                mgrsCoord = mgrs.forward([longitude, latitude]);
             } catch (e) {
-                console.error(e);
-                try {
-                    // Solution de secours si le niveau de précision bloque
-                    mgrsCoord = mgrs.forward([longitude, latitude]);
-                } catch (err) {
-                    mgrsCoord = "Hors zone";
-                }
+                console.error("Erreur MGRS library:", e);
+                // Fallback si la librairie échoue : affichage propre des coordonnées GPS en attendant
+                mgrsCoord = `Lat: ${latitude.toFixed(5)}, Lon: ${longitude.toFixed(5)}`;
             }
             
-            // Nettoyage des anciens marqueurs
             if (marker) { map.removeLayer(marker); map.removeLayer(circle); }
             
-            // Ajout du marqueur et du cercle de précision GPS
-            marker = L.marker([latitude, longitude]).addTo(map).bindPopup("<b>Position Tactique</b><br>MGRS: " + mgrsCoord).openPopup();
+            marker = L.marker([latitude, longitude]).addTo(map).bindPopup("<b>Position</b><br>" + mgrsCoord).openPopup();
             circle = L.circle([latitude, longitude], { 
                 radius: accuracy, 
                 color: '#0f0', 
@@ -64,28 +55,21 @@
                 fillOpacity: 0.15 
             }).addTo(map);
             
-            // Zoom maximal rapproché sur la position de l'utilisateur
-            map.setView([latitude, longitude], 18);
+            map.setView([latitude, longitude], 17);
             
-            // Affichage dans le bandeau tactique en haut à gauche
-            document.getElementById('status').innerHTML = `📍 <b>${mgrsCoord}</b><br><span style="font-size:12px;color:#ccc;">Précision GPS : ±${Math.round(accuracy)}m</span>`;
+            document.getElementById('status').innerHTML = `📍 <b>${mgrsCoord}</b><br><span style="font-size:12px;color:#ccc;">Précision : ±${Math.round(accuracy)}m</span>`;
         }
 
         function onPositionError(error) {
-            let message = "Erreur GPS";
-            if (error.code === error.PERMISSION_DENIED) message = "Permission refusée. Autorisez la géolocalisation.";
-            if (error.code === error.POSITION_UNAVAILABLE) message = "Signal GPS indisponible.";
-            if (error.code === error.TIMEOUT) message = "Délai d'attente GPS dépassé.";
-            document.getElementById('status').innerHTML = `<span style="color:#ff5555;">${message}</span>`;
+            document.getElementById('status').innerHTML = `<span style="color:#ff5555;">Erreur GPS : Activez la géolocalisation.</span>`;
         }
 
         function maPosition() {
-            document.getElementById('status').innerText = "Recherche satellite haute précision...";
+            document.getElementById('status').innerText = "Recherche satellite...";
             if (!navigator.geolocation) {
-                alert("La géolocalisation n'est pas supportée par votre navigateur.");
+                alert("Non supporté.");
                 return;
             }
-            // Options pour forcer la plus haute précision matérielle possible (GPS du téléphone/appareil)
             navigator.geolocation.getCurrentPosition(onPositionSuccess, onPositionError, {
                 enableHighAccuracy: true,
                 timeout: 15000,
@@ -93,7 +77,6 @@
             });
         }
 
-        // Lancement de la géolocalisation dès l'ouverture de la page
         window.onload = function() {
             maPosition();
         };
