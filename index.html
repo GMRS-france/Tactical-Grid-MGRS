@@ -13,6 +13,7 @@
         #map { width: 100%; height: 100%; }
         #status-container { position: absolute; top: 10px; left: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 15px; border-radius: 8px; border: 1px solid #0f0; max-width: 90%; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 65px; height: 65px; background: #0f0; border-radius: 50%; border: none; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        .btn-copy { background: #0f0; color: #000; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -27,6 +28,25 @@
         let marker = null;
         let circle = null;
         let clickMarker = null;
+        let line = null; // Ligne de visée
+        let userPos = null;
+
+        // Fonction pour calculer l'azimut (cap en degrés) entre deux points GPS
+        function calculerAzimut(lat1, lon1, lat2, lon2) {
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const toDeg = (rad) => (rad * 180) / Math.PI;
+
+            const dLon = toRad(lon2 - lon1);
+            const phi1 = toRad(lat1);
+            const phi2 = toRad(lat2);
+
+            const y = Math.sin(dLon) * Math.cos(phi2);
+            const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+            
+            let brng = Math.atan2(y, x);
+            brng = toDeg(brng);
+            return Math.round((brng + 360) % 360);
+        }
 
         function lancerProcessusTactique() {
             document.getElementById('status').innerText = "Recherche de la position GPS...";
@@ -41,6 +61,8 @@
                 const lng = position.coords.longitude;
                 const accuracy = position.coords.accuracy;
 
+                userPos = [lat, lng];
+
                 let mgrsCoord = "";
                 try {
                     mgrsCoord = mgrs.forward([lng, lat], 5);
@@ -48,7 +70,6 @@
                     mgrsCoord = `Lat: ${lat.toFixed(5)}, Lon: ${lng.toFixed(5)}`;
                 }
 
-                // Initialisation de la carte si elle n'existe pas encore
                 if (!map) {
                     map = L.map('map').setView([lat, lng], 17);
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -56,7 +77,7 @@
                         attribution: 'Map data © OpenStreetMap'
                     }).addTo(map);
 
-                    // Écouteur de clic sur n'importe quel point de la carte
+                    // Écouteur de clic pour analyser une cible avec distance et azimut
                     map.on('click', function(e) {
                         const clickLat = e.latlng.lat;
                         const clickLng = e.latlng.lng;
@@ -68,33 +89,49 @@
                             clickMgrs = `Lat: ${clickLat.toFixed(5)}, Lon: ${clickLng.toFixed(5)}`;
                         }
 
-                        if (clickMarker) {
-                            map.removeLayer(clickMarker);
+                        if (clickMarker) map.removeLayer(clickMarker);
+                        if (line) map.removeLayer(line);
+
+                        let tacticalInfo = "";
+                        if (userPos) {
+                            // Calcul de la distance
+                            const distanceMeters = map.distance(userPos, [clickLat, clickLng]);
+                            let distanceStr = distanceMeters >= 1000 ? 
+                                `${(distanceMeters / 1000).toFixed(2)} km` : 
+                                `${Math.round(distanceMeters)} m`;
+
+                            // Calcul de l'azimut (cap)
+                            const azimut = calculerAzimut(userPos[0], userPos[1], clickLat, clickLng);
+
+                            tacticalInfo = `<br><b>Distance :</b> ${distanceStr}<br><b>Cap (Azimut) :</b> ${azimut}°`;
+
+                            // Tracé d'une ligne jaune entre l'utilisateur et la cible
+                            line = L.polyline([userPos, [clickLat, clickLng]], {
+                                color: '#ff0',
+                                weight: 3,
+                                dashArray: '5, 5'
+                            }).addTo(map);
                         }
 
-                        // Ajout d'un marqueur standard sur le point cliqué
                         clickMarker = L.marker([clickLat, clickLng]).addTo(map)
-                            .bindPopup(`<b>Point Cible</b><br>MGRS: ${clickMgrs}`)
+                            .bindPopup(`<b>Cible</b><br>${clickMgrs}${tacticalInfo}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`)
                             .openPopup();
 
-                        // Mise à jour du bandeau supérieur avec la cible
-                        document.getElementById('status').innerHTML = `🎯 <b>Cible : ${clickMgrs}</b><br><span style="color:#ccc; font-size:12px;">Cliquez sur 🎯 pour revenir à vous</span>`;
+                        document.getElementById('status').innerHTML = `🎯 <b>Cible : ${clickMgrs}</b>${tacticalInfo}`;
                     });
 
                 } else {
                     map.setView([lat, lng], 17);
                 }
 
-                // Actualisation du marqueur utilisateur
                 if (marker) {
                     map.removeLayer(marker);
                     map.removeLayer(circle);
                 }
 
-                marker = L.marker([lat, lng]).addTo(map).bindPopup("<b>Position Tactique</b><br>MGRS: " + mgrsCoord).openPopup();
+                marker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Position Tactique</b><br>MGRS: ${mgrsCoord}<br><button class="btn-copy" onclick="copierTexte('${mgrsCoord}')">Copier MGRS</button>`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.2 }).addTo(map);
 
-                // Affichage dans le bandeau
                 document.getElementById('status').innerHTML = `📍 <b>${mgrsCoord}</b><br><span style="color:#ccc; font-size:12px;">Précision GPS : ±${Math.round(accuracy)}m</span>`;
 
             }, error => {
@@ -106,7 +143,14 @@
             });
         }
 
-        // Lancement au démarrage
+        function copierTexte(texte) {
+            navigator.clipboard.writeText(texte).then(() => {
+                alert("Coordonnées copiées : " + texte);
+            }).catch(() => {
+                alert("Erreur lors de la copie");
+            });
+        }
+
         window.onload = function() {
             lancerProcessusTactique();
         };
