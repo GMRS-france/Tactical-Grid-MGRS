@@ -37,7 +37,7 @@
             const { latitude: lat, longitude: lng, accuracy } = position.coords;
             let mgrsCoord = "Erreur MGRS";
             try {
-                mgrsCoord = mgrs.forward([lng, lat], 5);
+               mgrsCoord = mgrs.forward([lng, lat]);
             } catch (e) {
                 console.error(e);
             }
