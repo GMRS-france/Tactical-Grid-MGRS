@@ -2,153 +2,211 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0d1117">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tactical Grid MGRS</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
   <style>
-    :root {
-      --bg: #0d1117;
-      --panel: #161b22;
-      --border: #30363d;
-      --text: #c9d1d9;
-      --accent: #58a6ff;
-      --green: #238636;
-      --red: #da3633;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    * { box-sizing: border-box; touch-action: manipulation; }
-    body {
-      font-family: monospace, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      margin: 0; padding: 12px;
-      display: flex; flex-direction: column; align-items: center;
+    html, body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #1a1a1a;
+      color: #f0f0f0;
+      overflow: hidden;
     }
-    .app { width: 100%; max-width: 450px; }
-    .header {
-      border-bottom: 2px solid var(--border);
-      text-align: center; padding-bottom: 8px; margin-bottom: 12px;
+    #map {
+      width: 100%;
+      height: 100%;
+      z-index: 1;
     }
-    .header h1 { font-size: 1.1rem; margin: 0; letter-spacing: 2px; }
-    .card {
-      background: var(--panel); border: 1px solid var(--border);
-      border-radius: 6px; padding: 12px; margin-bottom: 10px;
+    /* Panneau d'informations MGRS & Géolocalisation */
+    .info-panel {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(20, 25, 30, 0.92);
+      border: 1px solid #3a4a58;
+      backdrop-filter: blur(8px);
+      padding: 12px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      text-align: center;
+      min-width: 280px;
     }
-    .label { font-size: 0.7rem; color: #8b949e; text-transform: uppercase; margin-bottom: 4px; }
-    .val-mgrs { font-size: 1.35rem; font-weight: bold; color: var(--accent); letter-spacing: 1px; }
-    .val-sub { font-size: 1rem; color: #fff; }
-    .btn {
-      width: 100%; background: var(--green); color: #fff; border: none;
-      padding: 14px; font-weight: bold; font-family: inherit; font-size: 1rem;
-      border-radius: 6px; cursor: pointer; text-transform: uppercase; margin-top: 5px;
+    .info-panel h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #8a9ba8;
+      margin-bottom: 4px;
     }
-    .status { font-size: 0.75rem; text-align: center; color: #8b949e; margin-top: 8px; }
+    .mgrs-display {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 20px;
+      font-weight: bold;
+      color: #00ff88;
+      letter-spacing: 1px;
+    }
+    .latlng-display {
+      font-size: 11px;
+      color: #a0a0a0;
+      margin-top: 2px;
+    }
+
+    /* Bouton de recentrage sur ma position */
+    .locate-btn {
+      position: absolute;
+      bottom: 30px;
+      right: 20px;
+      z-index: 1000;
+      background-color: #00ff88;
+      color: #111;
+      border: none;
+      padding: 14px 18px;
+      border-radius: 30px;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0,255,136,0.4);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+    .locate-btn:active {
+      transform: scale(0.95);
+    }
+    .status-badge {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background-color: #ffaa00;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .status-badge.active {
+      background-color: #00ff88;
+      box-shadow: 0 0 8px #00ff88;
+    }
   </style>
 </head>
 <body>
 
-<div class="app">
-  <div class="header"><h1>TACTICAL GRID MGRS</h1></div>
-  
-  <div class="card">
-    <div class="label">Référence MGRS (10 Chiffres / 1m)</div>
-    <div id="mgrs" class="val-mgrs">ATTENTE FIX GPS</div>
+  <div class="info-panel">
+    <h2><span id="status-dot" class="status-badge"></span>Coordonnées MGRS</h2>
+    <div id="mgrs-text" class="mgrs-display">Recherche du signal...</div>
+    <div id="latlng-text" class="latlng-display">GPS en attente de précision</div>
   </div>
 
-  <div class="card">
-    <div class="label">Coordonnées WGS84</div>
-    <div id="wgs84" class="val-sub">--° N, --° E</div>
-  </div>
+  <button class="locate-btn" onclick="centerOnUser()">
+    🎯 Ma position
+  </button>
 
-  <div class="card">
-    <div class="label">Précision Signal</div>
-    <div id="acc" class="val-sub">-- m</div>
-  </div>
+  <div id="map"></div>
 
-  <button id="btn" class="btn" onclick="toggleGPS()">Activer GPS</button>
-  <div id="status" class="status">Système prêt (Mode Hors-Ligne)</div>
-</div>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- USNG / MGRS Library -->
+  <script src="https://cdn.jsdelivr.net/npm/usng.js@0.1.3/usng.min.js"></script>
 
-<script>
-  // MOTEUR DU CONVERTISSEUR MGRS AUTONOME (Maths pure)
-  const NUM_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  
-  function LLtoUTM(lat, lon) {
-    const a = 6378137.0, eccSquared = 0.00669438;
-    const k0 = 0.9996;
-    let LongOrigin, latRad = lat * Math.PI/180, lonRad = lon * Math.PI/180;
-    let ZoneNumber = Math.floor((lon + 180)/6) + 1;
-    if (lat >= 56.0 && lat < 64.0 && lon >= 3.0 && lon < 12.0) ZoneNumber = 32;
-    LongOrigin = (ZoneNumber - 1)*6 - 180 + 3;
-    let LongOriginRad = LongOrigin * Math.PI/180;
-    let eccPrimeSquared = (eccSquared)/(1-eccSquared);
-    let N = a/Math.sqrt(1-eccSquared*Math.sin(latRad)*Math.sin(latRad));
-    let T = Math.tan(latRad)*Math.tan(latRad);
-    let C = eccPrimeSquared*Math.cos(latRad)*Math.cos(latRad);
-    let A = Math.cos(latRad)*(lonRad-LongOriginRad);
-    let M = a*((1 - eccSquared/4 - 3*eccSquared*eccSquared/64 - 5*eccSquared*eccSquared*eccSquared/256)*latRad - (3*eccSquared/8 + 3*eccSquared*eccSquared/32 + 45*eccSquared*eccSquared*eccSquared/1024)*Math.sin(2*latRad) + (15*eccSquared*eccSquared/256 + 45*eccSquared*eccSquared*eccSquared/1024)*Math.sin(4*latRad) - (35*eccSquared*eccSquared*eccSquared/3072)*Math.sin(6*latRad));
-    let UTMEasting = (k0*N*(A+(1-T+C)*A*A*A/6+(5-18*T+T*T+72*C-58*eccPrimeSquared)*A*A*A*A*A/120))+500000.0;
-    let UTMNorthing = (k0*(M+N*Math.tan(latRad)*(A*A/2+(5-T+9*C+4*C*C)*A*A*A*A/24+(61-58*T+T*T+600*C-330*eccPrimeSquared)*A*A*A*A*A*A/720)));
-    if (lat < 0) UTMNorthing += 10000000.0;
-    return { e: UTMEasting, n: UTMNorthing, z: ZoneNumber, band: getUtmBand(lat) };
-  }
+  <script>
+    // Initialisation de la carte (vue par défaut sur la France)
+    const map = L.map('map', {
+      zoomControl: false
+    }).setView([46.603354, 1.888334], 6);
 
-  function getUtmBand(lat) {
-    const bands = "CDEFGHJKLMNPQRSTUVWXX";
-    return bands[Math.floor((lat + 80) / 8)] || 'N';
-  }
+    // Ajout des commandes de zoom en bas à gauche
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-  function UTMtoMGRS(utm) {
-    const e100k = Math.floor(utm.e / 100000);
-    const n100k = Math.floor(utm.n / 100000) % 20;
-    const set = utm.z % 6;
-    let col = e100k - 1;
-    let colSet = (set === 0 ? 6 : set);
-    let lCol = NUM_LETTERS[((colSet - 1) % 3) * 8 + col];
-    let rowSet = (set % 2 === 0) ? 1 : 0;
-    let lRow = NUM_LETTERS[rowSet * 5 + (n100k % 10)];
-    if (rowSet === 1) {
-      let letters = "FGHJKLMNPQRSTUVABCDE";
-      lRow = letters[n100k];
+    // Fonds de carte OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let userMarker = null;
+    let accuracyCircle = null;
+    let usngConverter = new usng.converter();
+
+    // Fonction de conversion Lat/Lng -> MGRS
+    function getMGRS(lat, lng) {
+      try {
+        return usngConverter.LLtoMGRS(lat, lng, 5);
+      } catch (e) {
+        return "N/A";
+      }
     }
-    const eR = Math.floor(utm.e % 100000).toString().padStart(5, '0');
-    const nR = Math.floor(utm.n % 100000).toString().padStart(5, '0');
-    return `${utm.z}${utm.band} ${lCol}${lRow} ${eR} ${nR}`;
-  }
 
-  // GESTION DU GPS & PWA
-  let watchId = null;
-  function updatePos(pos) {
-    const lat = pos.coords.latitude, lon = pos.coords.longitude;
-    const utm = LLtoUTM(lat, lon);
-    document.getElementById('mgrs').innerText = UTMtoMGRS(utm);
-    document.getElementById('wgs84').innerText = `${lat.toFixed(5)}°N, ${lon.toFixed(5)}°E`;
-    document.getElementById('acc').innerText = `± ${Math.round(pos.coords.accuracy)} m`;
-    document.getElementById('status').innerText = "Signal GPS actif (Calcul local)";
-  }
+    // Mise à jour de la position GPS
+    function onLocationFound(e) {
+      const radius = e.accuracy / 2;
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      const mgrsCode = getMGRS(lat, lng);
 
-  function toggleGPS() {
-    const btn = document.getElementById('btn');
-    if (watchId === null) {
-      watchId = navigator.geolocation.watchPosition(updatePos, (err) => {
-        document.getElementById('status').innerText = "Erreur acquisition GPS";
-      }, { enableHighAccuracy: true });
-      btn.innerText = "Arrêter GPS"; btn.style.background = "var(--red)";
-    } else {
-      navigator.geolocation.clearWatch(watchId); watchId = null;
-      btn.innerText = "Activer GPS"; btn.style.background = "var(--green)";
-      document.getElementById('status').innerText = "GPS Inactif";
+      document.getElementById('mgrs-text').innerText = mgrsCode;
+      document.getElementById('latlng-text').innerText = `Lat: ${lat.toFixed(5)}° | Lng: ${lng.toFixed(5)}° (Précision: ±${Math.round(e.accuracy)}m)`;
+      document.getElementById('status-dot').classList.add('active');
+
+      if (!userMarker) {
+        userMarker = L.marker(e.latlng).addTo(map)
+          .bindPopup("<b>Vous êtes ici</b><br>MGRS: " + mgrsCode);
+        accuracyCircle = L.circle(e.latlng, radius, {
+          color: '#00ff88',
+          fillColor: '#00ff88',
+          fillOpacity: 0.15,
+          weight: 1
+        }).addTo(map);
+        map.setView(e.latlng, 16);
+      } else {
+        userMarker.setLatLng(e.latlng);
+        accuracyCircle.setLatLng(e.latlng);
+        accuracyCircle.setRadius(radius);
+      }
     }
-  }
 
-  // ENREGISTREMENT DU CACHE HORS-LIGNE PAR SERVICE WORKER DYNAMIQUE
-  if ('serviceWorker' in navigator) {
-    const swCode = `
-      self.addEventListener('install', e => e.waitUntil(caches.open('pwa').then(c => c.add('./'))));
-      self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
-    `;
-    const blob = new Blob([swCode], { type: 'text/javascript' });
-    navigator.serviceWorker.register(URL.createObjectURL(blob));
-  }
-</script>
+    function onLocationError(e) {
+      document.getElementById('mgrs-text').innerText = "Géolocalisation refusée/impossible";
+      document.getElementById('latlng-text').innerText = e.message;
+      document.getElementById('status-dot').classList.remove('active');
+    }
+
+    // Suivi continu de la position de l'utilisateur
+    map.locate({ setView: false, watch: true, enableHighAccuracy: true });
+    map.on('locationfound', onLocationFound);
+    map.on('locationerror', onLocationError);
+
+    // Clic manuel pour recentrer
+    function centerOnUser() {
+      if (userMarker) {
+        map.setView(userMarker.getLatLng(), 16);
+        userMarker.openPopup();
+      } else {
+        map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
+      }
+    }
+
+    // Afficher les MGRS lors d'un clic n'importe où sur la carte
+    let clickMarker = null;
+    map.on('click', function(e) {
+      const mgrsCode = getMGRS(e.latlng.lat, e.latlng.lng);
+      if (clickMarker) {
+        clickMarker.setLatLng(e.latlng);
+      } else {
+        clickMarker = L.marker(e.latlng).addTo(map);
+      }
+      clickMarker.bindPopup(`<b>Point sélectionné</b><br>MGRS: ${mgrsCode}<br>Lat: ${e.latlng.lat.toFixed(5)}, Lng: ${e.latlng.lng.toFixed(5)}`).openPopup();
+    });
+  </script>
 </body>
 </html>
