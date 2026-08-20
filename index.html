@@ -4,12 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tactical Grid MGRS France</title>
-    <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- MGRS Library -->
     <script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js"></script>
     <style>
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; }
@@ -85,11 +82,10 @@
         <div id="favorites-list">Aucun point</div>
     </div>
 
-    <!-- Modale du Cours MGRS Complet -->
     <div id="help-modal">
         <div class="modal-content">
             <button class="close-modal" onclick="basculerModalAide()">Fermer ✕</button>
-            <h2>📖 Guide MGRS & Millièmes d'Artillerie</h2>
+            <h2>📖 Guide MGRS & Artillerie</h2>
             
             <h3>1. Structure d'un code MGRS</h3>
             <p>Un code complet (ex: 31U DQ 4825 1290) se lit toujours de gauche à droite :</p>
@@ -110,7 +106,7 @@
             <ul>
                 <li><b>Principe :</b> Le cercle complet est divisé en <b>6400 millièmes</b> (au lieu de 360°).</li>
                 <li><b>Règle de base :</b> 1 millième correspond à l'angle sous lequel on voit un objet de 1 mètre de large à 1 kilomètre de distance.</li>
-                <li><b>Calcul rapide de distance :</b> $\text{Distance} = (\text{Taille réelle en mètres} \times 1000) / \text{Millièmes mesurés}$.</li>
+                <li><b>Formule d'estimation :</b> $\text{Distance} = (\text{Taille réelle en mètres} \times 1000) / \text{Millièmes mesurés}$.</li>
             </ul>
         </div>
     </div>
@@ -122,7 +118,6 @@
     <button id="btn-night" onclick="basculerModeNuit()" title="Mode nuit">🌙</button>
     <button id="btn-pos" onclick="centrerSurGPS()" title="Recentrer GPS">🎯</button>
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         let map = null;
