@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tactical Grid MGRS France</title>
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- MGRS Library -->
@@ -28,14 +31,12 @@
         let userMarker = null;
         let circle = null;
         
-        // Variables pour la mesure A -> B
         let pointA = null;
         let pointB = null;
         let markerA = null;
         let markerB = null;
         let lineAB = null;
 
-        // Fonction pour calculer l'azimut en millièmes d'artillerie (6400 mil = 360°)
         function calculerAzimutMilliemes(lat1, lon1, lat2, lon2) {
             const toRad = (deg) => (deg * Math.PI) / 180;
             const toDeg = (rad) => (rad * 180) / Math.PI;
@@ -82,7 +83,6 @@
                         attribution: 'Map data © OpenStreetMap'
                     }).addTo(map);
 
-                    // Gestionnaire de clics pour les mesures libres Point A -> Point B
                     map.on('click', function(e) {
                         const clickLat = e.latlng.lat;
                         const clickLng = e.latlng.lng;
@@ -94,7 +94,6 @@
                             clickMgrs = `Lat: ${clickLat.toFixed(5)}, Lon: ${clickLng.toFixed(5)}`;
                         }
 
-                        // Si on n'a pas de Point A, ou si A et B sont déjà définis, on réinitialise pour poser un nouveau Point A
                         if (!pointA || (pointA && pointB)) {
                             if (markerA) map.removeLayer(markerA);
                             if (markerB) map.removeLayer(markerB);
@@ -110,14 +109,12 @@
                             document.getElementById('status').innerHTML = `📍 <b>Point A défini : ${clickMgrs}</b><br><span style="color:#ff0;">Cliquez pour poser le Point B (Cible)</span>`;
                         
                         } else {
-                            // On a déjà un Point A, ce clic définit le Point B
                             pointB = [clickLat, clickLng];
 
                             markerB = L.marker(pointB).addTo(map)
                                 .bindPopup(`<b>Point B (Cible)</b><br>MGRS: ${clickMgrs}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`)
                                 .openPopup();
 
-                            // Calculs de distance et d'azimut entre A et B
                             const distanceMeters = map.distance(pointA, pointB);
                             let distanceStr = distanceMeters >= 1000 ? 
                                 `${(distanceMeters / 1000).toFixed(2)} km` : 
@@ -125,7 +122,6 @@
 
                             const azimutMil = calculerAzimutMilliemes(pointA[0], pointA[1], pointB[0], pointB[1]);
 
-                            // Tracé de la ligne entre A et B
                             lineAB = L.polyline([pointA, pointB], {
                                 color: '#ff0',
                                 weight: 3,
@@ -150,7 +146,7 @@
                 userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position GPS</b><br>MGRS: ${mgrsCoord}`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
 
-                document.getElementById('status').innerHTML = `📍 <b>GPS : ${mgrsCoord}</b><br><span style="color:#ccc; font-size:12px;">Cliquez deux fois sur la carte pour mesurer A ➔ B</span>`;
+                document.getElementById('status').innerHTML = `📍 <b>GPS : ${mgrsCoord}</b><br><span style="color:#ccc; font-size:12px;">Mode Hors-ligne Actif</span>`;
 
             }, error => {
                 document.getElementById('status').innerHTML = `<span style="color:#ff5555;">Erreur GPS : Activez la localisation.</span>`;
@@ -172,6 +168,15 @@
                 alert("Coordonnées copiées : " + texte);
             }).catch(() => {
                 alert("Erreur lors de la copie");
+            });
+        }
+
+        // Enregistrement du Service Worker pour le mode hors-ligne
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker enregistré !', reg))
+                    .catch(err => console.log('Échec Service Worker :', err));
             });
         }
 
