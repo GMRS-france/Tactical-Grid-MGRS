@@ -22,11 +22,11 @@
         #search-btn { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
         
         /* Boutons flottants en bas à droite */
-        #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 60px; height: 60px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 26px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        #btn-night { position: absolute; bottom: 100px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        #btn-fav { position: absolute; bottom: 155px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        #btn-help { position: absolute; bottom: 210px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0aa; color: #fff; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        #btn-reset-route { position: absolute; bottom: 265px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #f55; color: #fff; border-radius: 50%; border: none; font-size: 18px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        #btn-pos { position: absolute; bottom: 20px; right: 20px; z-index: 1000; width: 55px; height: 55px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        #btn-night { position: absolute; bottom: 85px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        #btn-fav { position: absolute; bottom: 140px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        #btn-help { position: absolute; bottom: 195px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0aa; color: #fff; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        #btn-reset-route { position: absolute; bottom: 250px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #f55; color: #fff; border-radius: 50%; border: none; font-size: 18px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
         
         /* Boutons d'action dans les popups */
         .btn-action { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px; font-size: 11px; display: inline-block; }
@@ -40,11 +40,14 @@
         .fav-item span:hover { color: #fff; }
         .fav-item button { background: none; border: none; color: #f55; cursor: pointer; font-weight: bold; font-size: 14px; }
 
-        /* Fenêtre Modale de Cours (MGRS) */
+        /* Fenêtre Modale de Cours MGRS Complet */
         #help-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; }
-        .modal-content { background: #111; color: #0f0; border: 2px solid #0f0; border-radius: 10px; width: 85%; max-width: 600px; max-height: 80vh; overflow-y: auto; padding: 20px; box-shadow: 0 5px 20px rgba(0,255,0,0.3); font-size: 13px; line-height: 1.5; }
+        .modal-content { background: #111; color: #0f0; border: 2px solid #0f0; border-radius: 10px; width: 90%; max-width: 650px; max-height: 85vh; overflow-y: auto; padding: 20px; box-shadow: 0 5px 20px rgba(0,255,0,0.3); font-size: 13px; line-height: 1.5; }
         .modal-content h2 { color: #fff; border-bottom: 1px solid #0f0; padding-bottom: 5px; margin-top: 0; }
-        .modal-content h3 { color: #ff0; margin-top: 15px; }
+        .modal-content h3 { color: #ff0; margin-top: 20px; border-left: 3px solid #ff0; padding-left: 8px; }
+        .modal-content table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+        .modal-content th, .modal-content td { border: 1px solid #333; padding: 6px; text-align: left; }
+        .modal-content th { background: #1a1a1a; color: #0f0; }
         .close-modal { background: #f55; color: #fff; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; float: right; font-size: 14px; }
 
         /* --- MODE NUIT (INFRAROUGE) --- */
@@ -60,7 +63,8 @@
         body.night-mode #favorites-panel { background: rgba(20,0,0,0.95); color: #f00; border-color: #f00; }
         body.night-mode .modal-content { background: #100; color: #f88; border-color: #f00; }
         body.night-mode .modal-content h2 { color: #fff; border-color: #f00; }
-        body.night-mode .modal-content h3 { color: #ffa0a0; }
+        body.night-mode .modal-content h3 { color: #ffa0a0; border-left-color: #f00; }
+        body.night-mode .modal-content th { background: #200; color: #f00; }
         body.night-mode .btn-action { background: #f00; color: #fff; }
         body.night-mode .btn-save { background: #fa0; color: #000; }
         body.night-mode .btn-del { background: #900; color: #fff; }
@@ -81,32 +85,61 @@
         <div id="favorites-list">Aucun point</div>
     </div>
 
-    <!-- Modale du Cours MGRS -->
+    <!-- Modale du Cours MGRS Complet -->
     <div id="help-modal">
         <div class="modal-content">
             <button class="close-modal" onclick="basculerModalAide()">Fermer ✕</button>
-            <h2>📖 Guide MGRS & Tactique</h2>
+            <h2>📖 Cours Complet : Le Système MGRS</h2>
             
-            <h3>1. Structure d'un code MGRS</h3>
-            <p>Un code complet (ex: <b>31U DQ 4825 1290</b>) se lit toujours de gauche à droite :</p>
+            <p><i>Le MGRS (Military Grid Reference System) est le standard géographique de l'OTAN. Il fonctionne en mètres pour mesurer des distances directement sur le terrain.</i></p>
+
+            <h3>1. Décomposition d'une coordonnée</h3>
+            <p>Exemple type : <b>31U DQ 4825 1290</b> (se lit strictement de gauche à droite)</p>
             <ul>
-                <li><b>Fuseau (ex: 31U) :</b> La grande zone géographique.</li>
-                <li><b>Carré 100km (ex: DQ) :</b> Repérage sur la carte d'état-major.</li>
-                <li><b>Chiffres (ex: 4825 1290) :</b> La précision métrique. <i>Règle : "On lit d'abord l'avenue (axe horizontal), puis on monte dans l'immeuble (axe vertical)".</i></li>
+                <li><b>Le Fuseau (ex: 31U) :</b> Grande zone géographique de base. La France métropolitaine est principalement sur les fuseaux 31T, 31U, 30T ou 32T.</li>
+                <li><b>Le Carré de 100 km (ex: DQ) :</b> Désigné par deux lettres, il repère le grand secteur sur la carte d'état-major.</li>
+                <li><b>La Coordonnée Métrique (ex: 4825 1290) :</b> Nombre pair de chiffres. 
+                    <br>👉 <i>Règle d'or :</i> <b>"On lit d'abord l'avenue (axe horizontal / vers l'Est), puis on monte dans l'immeuble (axe vertical / vers le Nord)."</b>
+                </li>
             </ul>
 
-            <h3>2. Niveau de précision</h3>
-            <ul>
-                <li><b>4 chiffres (ex: 48 12) :</b> Précision à 1 km (le carré de base de la carte).</li>
-                <li><b>6 chiffres (ex: 482 129) :</b> Précision à 100 m (point de ralliement).</li>
-                <li><b>8 chiffres (ex: 4825 1290) :</b> Précision à 10 m (position GPS précise).</li>
-            </ul>
+            <h3>2. Les Niveaux de Précision</h3>
+            <table>
+                <tr>
+                    <th>Chiffres</th>
+                    <th>Précision</th>
+                    <th>Usage</th>
+                </tr>
+                <tr>
+                    <td>2 chiffres (48 12)</td>
+                    <td>10 kilomètres</td>
+                    <td>Vaste région / secteur global</td>
+                </tr>
+                <tr>
+                    <td>4 chiffres (482 129)</td>
+                    <td>1 kilomètre</td>
+                    <td>Carré de base de la carte IGN</td>
+                </tr>
+                <tr>
+                    <td>6 chiffres (4825 1290)</td>
+                    <td>100 mètres</td>
+                    <td><b>Standard tactique (ralliement, obstacle)</b></td>
+                </tr>
+                <tr>
+                    <td>8 chiffres (48256 12903)</td>
+                    <td>10 mètres</td>
+                    <td>Position GPS précise (bâtiment)</td>
+                </tr>
+            </table>
 
-            <h3>3. Astuces du Chef de Patrouille</h3>
-            <ul>
-                <li><b>La boussole physique :</b> Ne dépend pas des batteries et reste l'outil le plus rapide pour tenir un cap sur le terrain.</li>
-                <li><b>Kilomètre-Effort (KE) :</b> Combine distance et dénivelé ($KE = Dist + D+/125 + D-/400$). Compter une base de 4 KE/h en marche chargée.</li>
-            </ul>
+            <h3>3. Méthode pour trouver un point (à 6 chiffres)</h3>
+            <p>Pour le point <b>DQ 482 129</b> :</p>
+            <ol>
+                <li>Repérer le carré de 100 km <b>DQ</b> sur la carte.</li>
+                <li>Chercher la ligne horizontale vers l'Est correspondant aux 3 premiers chiffres (<b>482</b>).</li>
+                <li>Chercher la ligne verticale vers le Nord correspondant aux 3 chiffres suivants (<b>129</b>).</li>
+                <li>L'intersection donne le coin inférieur gauche du carré de 100m.</li>
+            </ol>
         </div>
     </div>
     
