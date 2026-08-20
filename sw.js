@@ -1,26 +1,30 @@
-const cacheName = 'mgrs-france-v2';
-const assets = ['index.html'];
+const CACHE_NAME = 'mgrs-cache-v1';
+const assetsToCache = [
+  './index.html',
+  './manifest.json',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  'https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js',
+  'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+];
 
-self.addEventListener('install', e => {
-    e.waitUntil(caches.open(cacheName).then(cache => cache.addAll(assets)));
-    self.skipWaiting();
+// Installation du Service Worker et mise en cache des fichiers essentiels
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        return cache.addAll(assetsToCache);
+      })
+  );
 });
 
-self.addEventListener('activate', e => {
-    e.waitUntil(clients.claim());
-});
-
-self.addEventListener('fetch', e => {
-    e.respondWith(
-        caches.match(e.request).then(response => {
-            return response || fetch(e.request).then(res => {
-                if (e.request.url.includes('tile.openstreetmap.org')) {
-                    caches.open(cacheName).then(cache => {
-                        cache.put(e.request, res.clone());
-                    });
-                }
-                return res;
-            }).catch(() => {});
-        })
-    );
+// Interception des requêtes réseau pour servir le cache en mode hors-ligne
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        return response || fetch(event.request);
+      })
+  );
 });
