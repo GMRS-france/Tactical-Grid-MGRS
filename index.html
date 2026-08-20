@@ -16,7 +16,7 @@
         #map { width: 100%; height: 100%; transition: filter 0.3s ease; }
         
         /* Panneau d'état fixé en haut à droite */
-        #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 10px 14px; border-radius: 8px; border: 1px solid #0f0; max-width: 290px; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); line-height: 1.4; }
+        #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 10px 14px; border-radius: 8px; border: 1px solid #0f0; max-width: 310px; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); line-height: 1.4; }
         #search-container { margin-top: 8px; display: flex; gap: 5px; }
         #search-input { background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px; border-radius: 4px; font-size: 12px; width: 160px; outline: none; text-transform: uppercase; }
         #search-btn { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
@@ -78,14 +78,15 @@
         let userMarker = null;
         let circle = null;
         
-        let cheminementPoints = []; // Stocke les [lat, lng] du tracé
-        let cheminementMarkers = []; // Stocke les marqueurs affichés
-        let polylineRoute = null; // Ligne reliant les points
+        let cheminementPoints = []; 
+        let cheminementMarkers = []; 
+        let polylineRoute = null; 
         let searchMarker = null;
         let isNightMode = false;
         let favoris = JSON.parse(localStorage.getItem('tactical_favs') || '[]');
 
-        function calculerAzimutMilliemes(lat1, lon1, lat2, lon2) {
+        // Fonction pour calculer les deux formats de cap (Degrés et Millièmes)
+        function calculerCaps(lat1, lon1, lat2, lon2) {
             const toRad = (deg) => (deg * Math.PI) / 180;
             const toDeg = (rad) => (rad * 180) / Math.PI;
 
@@ -98,12 +99,12 @@
             
             let brng = Math.atan2(y, x);
             brng = toDeg(brng);
-            let azimutDeg = (brng + 360) % 360;
+            let azimutDeg = Math.round((brng + 360) % 360);
 
             let azimutMil = Math.round((azimutDeg * 6400) / 360);
             if (azimutMil >= 6400) azimutMil = 0;
             
-            return azimutMil;
+            return { deg: azimutDeg, mil: azimutMil };
         }
 
         function initialiserCarte() {
@@ -142,7 +143,6 @@
                             clickMgrs = `Lat: ${clickLat.toFixed(5)}, Lon: ${clickLng.toFixed(5)}`;
                         }
 
-                        // Ajouter le point au cheminement
                         cheminementPoints.push([clickLat, clickLng]);
                         const pointIndex = cheminementPoints.length;
 
@@ -155,7 +155,6 @@
                             .openPopup();
                         cheminementMarkers.push(marker);
 
-                        // Mettre à jour la polyligne
                         if (polylineRoute) {
                             polylineRoute.setLatLngs(cheminementPoints);
                         } else {
@@ -166,7 +165,6 @@
                             }).addTo(map);
                         }
 
-                        // Calculs de distance et cap si on a au moins 2 points
                         if (cheminementPoints.length >= 2) {
                             let distanceTotale = 0;
                             for (let i = 0; i < cheminementPoints.length - 1; i++) {
@@ -176,13 +174,13 @@
                             const dernierPt = cheminementPoints[cheminementPoints.length - 2];
                             const avantDernierPt = cheminementPoints[cheminementPoints.length - 1];
                             const distanceEtape = map.distance(dernierPt, avantDernierPt);
-                            const azimutMil = calculerAzimutMilliemes(dernierPt[0], dernierPt[1], avantDernierPt[0], avantDernierPt[1]);
+                            const caps = calculersCaps(dernierPt[0], dernierPt[1], avantDernierPt[0], avantDernierPt[1]);
 
                             let distTotStr = distanceTotale >= 1000 ? `${(distanceTotale / 1000).toFixed(2)} km` : `${Math.round(distanceTotale)} m`;
                             let distEtapStr = distanceEtape >= 1000 ? `${(distanceEtape / 1000).toFixed(2)} km` : `${Math.round(distanceEtape)} m`;
 
-                            document.getElementById('status').innerHTML = `📍 <b>Jalon #${pointIndex} posé</b><br>` +
-                                `Étape : ${distEtapStr} | Cap : ${azimutMil} mil<br>` +
+                            document.getElementById('status').innerHTML = `📍 <b>Jalon #${pointIndex}</b><br>` +
+                                `Étape : ${distEtapStr} | Cap : <b>${caps.deg}°</b> (${caps.mil} mil)<br>` +
                                 `<b style="color:${isNightMode ? '#f88' : '#7ff'};">Total cumulé : ${distTotStr}</b>`;
                         } else {
                             document.getElementById('status').innerHTML = `📍 <b>Départ (Jalon #1)</b><br><span style="font-size:11px;">${clickMgrs}</span><br><span style="color:${isNightMode ? '#f55' : '#ff0'};">Cliquez pour jalon suivant</span>`;
@@ -209,6 +207,11 @@
                 timeout: 10000,
                 maximumAge: 0
             });
+        }
+
+        // Correction de la faute de frappe éventuelle dans le nom de fonction
+        function calculersCaps(lat1, lon1, lat2, lon2) {
+            return calculerCaps(lat1, lon1, lat2, lon2);
         }
 
         function effacerItineraire() {
@@ -273,7 +276,6 @@
             const btnNight = document.getElementById('btn-night');
             btnNight.innerText = isNightMode ? "☀️" : "🌙";
             
-            // Mettre à jour la couleur de la polyligne existante si besoin
             if (polylineRoute) {
                 polylineRoute.setStyle({ color: isNightMode ? '#f00' : '#ff0' });
             }
