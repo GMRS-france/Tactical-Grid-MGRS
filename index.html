@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0d1117">
+  <title>Tactical Grid MGRS</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --green: #238636;
+      --red: #da3633;
+    }
+    * { box-sizing: border-box; touch-action: manipulation; }
+    body {
+      font-family: monospace, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0; padding: 12px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .app { width: 100%; max-width: 450px; }
+    .header {
+      border-bottom: 2px solid var(--border);
+      text-align: center; padding-bottom: 8px; margin-bottom: 12px;
+    }
+    .header h1 { font-size: 1.1rem; margin: 0; letter-spacing: 2px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; margin-bottom: 10px;
+    }
+    .label { font-size: 0.7rem; color: #8b949e; text-transform: uppercase; margin-bottom: 4px; }
+    .val-mgrs { font-size: 1.35rem; font-weight: bold; color: var(--accent); letter-spacing: 1px; }
+    .val-sub { font-size: 1rem; color: #fff; }
+    .btn {
+      width: 100%; background: var(--green); color: #fff; border: none;
+      padding: 14px; font-weight: bold; font-family: inherit; font-size: 1rem;
+      border-radius: 6px; cursor: pointer; text-transform: uppercase; margin-top: 5px;
+    }
+    .status { font-size: 0.75rem; text-align: center; color: #8b949e; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header"><h1>TACTICAL GRID MGRS</h1></div>
+  
+  <div class="card">
+    <div class="label">Référence MGRS (10 Chiffres / 1m)</div>
+    <div id="mgrs" class="val-mgrs">ATTENTE FIX GPS</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Coordonnées WGS84</div>
+    <div id="wgs84" class="val-sub">--° N, --° E</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Précision Signal</div>
+    <div id="acc" class="val-sub">-- m</div>
+  </div>
+
+  <button id="btn" class="btn" onclick="toggleGPS()">Activer GPS</button>
+  <div id="status" class="status">Système prêt (Mode Hors-Ligne)</div>
+</div>
+
+<script>
+  // MOTEUR DU CONVERTISSEUR MGRS AUTONOME (Maths pure)
+  const NUM_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  
+  function LLtoUTM(lat, lon) {
+    const a = 6378137.0, eccSquared = 0.00669438;
+    const k0 = 0.9996;
+    let LongOrigin, latRad = lat * Math.PI/180, lonRad = lon * Math.PI/180;
+    let ZoneNumber = Math.floor((lon + 180)/6) + 1;
+    if (lat >= 56.0 && lat < 64.0 && lon >= 3.0 && lon < 12.0) ZoneNumber = 32;
+    LongOrigin = (ZoneNumber - 1)*6 - 180 + 3;
+    let LongOriginRad = LongOrigin * Math.PI/180;
+    let eccPrimeSquared = (eccSquared)/(1-eccSquared);
+    let N = a/Math.sqrt(1-eccSquared*Math.sin(latRad)*Math.sin(latRad));
+    let T = Math.tan(latRad)*Math.tan(latRad);
+    let C = eccPrimeSquared*Math.cos(latRad)*Math.cos(latRad);
+    let A = Math.cos(latRad)*(lonRad-LongOriginRad);
+    let M = a*((1 - eccSquared/4 - 3*eccSquared*eccSquared/64 - 5*eccSquared*eccSquared*eccSquared/256)*latRad - (3*eccSquared/8 + 3*eccSquared*eccSquared/32 + 45*eccSquared*eccSquared*eccSquared/1024)*Math.sin(2*latRad) + (15*eccSquared*eccSquared/256 + 45*eccSquared*eccSquared*eccSquared/1024)*Math.sin(4*latRad) - (35*eccSquared*eccSquared*eccSquared/3072)*Math.sin(6*latRad));
+    let UTMEasting = (k0*N*(A+(1-T+C)*A*A*A/6+(5-18*T+T*T+72*C-58*eccPrimeSquared)*A*A*A*A*A/120))+500000.0;
+    let UTMNorthing = (k0*(M+N*Math.tan(latRad)*(A*A/2+(5-T+9*C+4*C*C)*A*A*A*A/24+(61-58*T+T*T+600*C-330*eccPrimeSquared)*A*A*A*A*A*A/720)));
+    if (lat < 0) UTMNorthing += 10000000.0;
+    return { e: UTMEasting, n: UTMNorthing, z: ZoneNumber, band: getUtmBand(lat) };
+  }
+
+  function getUtmBand(lat) {
+    const bands = "CDEFGHJKLMNPQRSTUVWXX";
+    return bands[Math.floor((lat + 80) / 8)] || 'N';
+  }
+
+  function UTMtoMGRS(utm) {
+    const e100k = Math.floor(utm.e / 100000);
+    const n100k = Math.floor(utm.n / 100000) % 20;
+    const set = utm.z % 6;
+    let col = e100k - 1;
+    let colSet = (set === 0 ? 6 : set);
+    let lCol = NUM_LETTERS[((colSet - 1) % 3) * 8 + col];
+    let rowSet = (set % 2 === 0) ? 1 : 0;
+    let lRow = NUM_LETTERS[rowSet * 5 + (n100k % 10)];
+    if (rowSet === 1) {
+      let letters = "FGHJKLMNPQRSTUVABCDE";
+      lRow = letters[n100k];
+    }
+    const eR = Math.floor(utm.e % 100000).toString().padStart(5, '0');
+    const nR = Math.floor(utm.n % 100000).toString().padStart(5, '0');
+    return `${utm.z}${utm.band} ${lCol}${lRow} ${eR} ${nR}`;
+  }
+
+  // GESTION DU GPS & PWA
+  let watchId = null;
+  function updatePos(pos) {
+    const lat = pos.coords.latitude, lon = pos.coords.longitude;
+    const utm = LLtoUTM(lat, lon);
+    document.getElementById('mgrs').innerText = UTMtoMGRS(utm);
+    document.getElementById('wgs84').innerText = `${lat.toFixed(5)}°N, ${lon.toFixed(5)}°E`;
+    document.getElementById('acc').innerText = `± ${Math.round(pos.coords.accuracy)} m`;
+    document.getElementById('status').innerText = "Signal GPS actif (Calcul local)";
+  }
+
+  function toggleGPS() {
+    const btn = document.getElementById('btn');
+    if (watchId === null) {
+      watchId = navigator.geolocation.watchPosition(updatePos, (err) => {
+        document.getElementById('status').innerText = "Erreur acquisition GPS";
+      }, { enableHighAccuracy: true });
+      btn.innerText = "Arrêter GPS"; btn.style.background = "var(--red)";
+    } else {
+      navigator.geolocation.clearWatch(watchId); watchId = null;
+      btn.innerText = "Activer GPS"; btn.style.background = "var(--green)";
+      document.getElementById('status').innerText = "GPS Inactif";
+    }
+  }
+
+  // ENREGISTREMENT DU CACHE HORS-LIGNE PAR SERVICE WORKER DYNAMIQUE
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      self.addEventListener('install', e => e.waitUntil(caches.open('pwa').then(c => c.add('./'))));
+      self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+    `;
+    const blob = new Blob([swCode], { type: 'text/javascript' });
+    navigator.serviceWorker.register(URL.createObjectURL(blob));
+  }
+</script>
+</body>
+</html>
