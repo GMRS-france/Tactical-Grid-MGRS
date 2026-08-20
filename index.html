@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tactical Grid MGRS France</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- MGRS Library -->
     <script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js"></script>
     <style>
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
@@ -14,40 +16,100 @@
     </style>
 </head>
 <body>
-    <div id="status-container"><div id="status">Cliquez sur la carte pour obtenir un MGRS</div></div>
+    <div id="status-container"><div id="status">Acquisition GPS...</div></div>
     <div id="map"></div>
-    <button id="btn-pos" onclick="recenter()">🎯</button>
+    <button id="btn-pos" onclick="lancerProcessusTactique()">🎯</button>
 
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map').setView([48.5, -4.5], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        let map = null;
+        let marker = null;
+        let circle = null;
+        let clickMarker = null;
 
-        let userMarker, clickMarker;
+        function lancerProcessusTactique() {
+            document.getElementById('status').innerText = "Recherche de la position GPS...";
 
-        // Fonction pour gérer le clic sur la carte
-        map.on('click', function(e) {
-            const lat = e.latlng.lat;
-            const lng = e.latlng.lng;
-            const mgrsCoord = mgrs.forward([lng, lat], 5);
+            if (!navigator.geolocation) {
+                alert("La géolocalisation n'est pas supportée par votre appareil.");
+                return;
+            }
 
-            if (clickMarker) map.removeLayer(clickMarker);
-            clickMarker = L.marker([lat, lng], {icon: L.divIcon({className: 'custom-icon', html: '📍'})}).addTo(map);
-            clickMarker.bindPopup("<b>Point ciblé</b><br>MGRS: " + mgrsCoord).openPopup();
-            
-            document.getElementById('status').innerHTML = `📍 <b>Cible: ${mgrsCoord}</b><br><span style="font-size:12px;color:#ccc;">Lat: ${lat.toFixed(4)}, Lon: ${lng.toFixed(4)}</span>`;
-        });
+            navigator.geolocation.getCurrentPosition(position => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const accuracy = position.coords.accuracy;
 
-        function recenter() {
-            navigator.geolocation.getCurrentPosition(pos => {
-                const { latitude, longitude } = pos.coords;
-                if (userMarker) map.removeLayer(userMarker);
-                userMarker = L.marker([latitude, longitude]).addTo(map).bindPopup("Vous êtes ici").openPopup();
-                map.setView([latitude, longitude], 17);
+                let mgrsCoord = "";
+                try {
+                    mgrsCoord = mgrs.forward([lng, lat], 5);
+                } catch (e) {
+                    mgrsCoord = `Lat: ${lat.toFixed(5)}, Lon: ${lng.toFixed(5)}`;
+                }
+
+                // Initialisation de la carte si elle n'existe pas encore
+                if (!map) {
+                    map = L.map('map').setView([lat, lng], 17);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: 'Map data © OpenStreetMap'
+                    }).addTo(map);
+
+                    // Écouteur de clic sur n'importe quel point de la carte
+                    map.on('click', function(e) {
+                        const clickLat = e.latlng.lat;
+                        const clickLng = e.latlng.lng;
+                        let clickMgrs = "";
+
+                        try {
+                            clickMgrs = mgrs.forward([clickLng, clickLat], 5);
+                        } catch (err) {
+                            clickMgrs = `Lat: ${clickLat.toFixed(5)}, Lon: ${clickLng.toFixed(5)}`;
+                        }
+
+                        if (clickMarker) {
+                            map.removeLayer(clickMarker);
+                        }
+
+                        // Ajout d'un marqueur standard sur le point cliqué
+                        clickMarker = L.marker([clickLat, clickLng]).addTo(map)
+                            .bindPopup(`<b>Point Cible</b><br>MGRS: ${clickMgrs}`)
+                            .openPopup();
+
+                        // Mise à jour du bandeau supérieur avec la cible
+                        document.getElementById('status').innerHTML = `🎯 <b>Cible : ${clickMgrs}</b><br><span style="color:#ccc; font-size:12px;">Cliquez sur 🎯 pour revenir à vous</span>`;
+                    });
+
+                } else {
+                    map.setView([lat, lng], 17);
+                }
+
+                // Actualisation du marqueur utilisateur
+                if (marker) {
+                    map.removeLayer(marker);
+                    map.removeLayer(circle);
+                }
+
+                marker = L.marker([lat, lng]).addTo(map).bindPopup("<b>Position Tactique</b><br>MGRS: " + mgrsCoord).openPopup();
+                circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.2 }).addTo(map);
+
+                // Affichage dans le bandeau
+                document.getElementById('status').innerHTML = `📍 <b>${mgrsCoord}</b><br><span style="color:#ccc; font-size:12px;">Précision GPS : ±${Math.round(accuracy)}m</span>`;
+
+            }, error => {
+                document.getElementById('status').innerHTML = `<span style="color:#ff5555;">Erreur GPS : Activez la localisation.</span>`;
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
             });
         }
 
-        window.onload = recenter;
+        // Lancement au démarrage
+        window.onload = function() {
+            lancerProcessusTactique();
+        };
     </script>
 </body>
 </html>
