@@ -15,7 +15,7 @@
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; }
         #map { width: 100%; height: 100%; transition: filter 0.3s ease; }
         
-        /* Panneau d'état fixé solidement en haut à droite */
+        /* Panneau d'état fixé en haut à droite */
         #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 10px 14px; border-radius: 8px; border: 1px solid #0f0; max-width: 280px; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); line-height: 1.4; }
         #search-container { margin-top: 8px; display: flex; gap: 5px; }
         #search-input { background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px; border-radius: 4px; font-size: 12px; width: 160px; outline: none; text-transform: uppercase; }
@@ -24,7 +24,16 @@
         /* Boutons flottants en bas à droite */
         #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 60px; height: 60px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 26px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
         #btn-night { position: absolute; bottom: 100px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        .btn-copy { background: #0f0; color: #000; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; font-size: 11px; }
+        #btn-fav { position: absolute; bottom: 155px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        
+        /* Boutons d'action dans les popups */
+        .btn-action { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px; font-size: 11px; display: inline-block; }
+        .btn-save { background: #ff0; color: #000; }
+
+        /* Panneau des favoris */
+        #favorites-panel { position: absolute; top: 120px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.9); color: #0f0; padding: 10px; border-radius: 8px; border: 1px solid #0f0; width: 260px; max-height: 200px; overflow-y: auto; display: none; font-size: 11px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .fav-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding: 4px 0; }
+        .fav-item button { background: none; border: none; color: #f55; cursor: pointer; font-weight: bold; }
 
         /* --- MODE NUIT (INFRAROUGE) --- */
         body.night-mode { background-color: #000; }
@@ -33,8 +42,10 @@
         body.night-mode #search-btn { background: #f00; color: #fff; }
         body.night-mode #btn-pos { background: #f00; color: #fff; }
         body.night-mode #btn-night { background: #f00; color: #fff; }
-        body.night-mode .btn-copy { background: #f00; color: #fff; }
-        /* Filtre agressif pour basculer les tuiles OSM en mode sombre/rouge */
+        body.night-mode #btn-fav { background: #f00; color: #fff; }
+        body.night-mode #favorites-panel { background: rgba(20,0,0,0.95); color: #f00; border-color: #f00; }
+        body.night-mode .btn-action { background: #f00; color: #fff; }
+        body.night-mode .btn-save { background: #fa0; color: #000; }
         body.night-mode #map { filter: brightness(0.5) invert(1) contrast(3) hue-rotate(180deg); }
     </style>
 </head>
@@ -46,11 +57,16 @@
             <button id="search-btn" onclick="rechercherMGRS()">Chercher</button>
         </div>
     </div>
+
+    <div id="favorites-panel">
+        <b>⭐ Points Sauvegardés</b>
+        <div id="favorites-list">Aucun point</div>
+    </div>
     
     <div id="map"></div>
-    <!-- ID et fonction correctement liés -->
-    <button id="btn-night" onclick="basculerModeNuit()">🌙</button>
-    <button id="btn-pos" onclick="centrerSurGPS()">🎯</button>
+    <button id="btn-fav" onclick="basculerPanneauFavoris()" title="Voir les favoris">⭐</button>
+    <button id="btn-night" onclick="basculerModeNuit()" title="Mode nuit">🌙</button>
+    <button id="btn-pos" onclick="centrerSurGPS()" title="Recentrer GPS">🎯</button>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -66,6 +82,7 @@
         let lineAB = null;
         let searchMarker = null;
         let isNightMode = false;
+        let favoris = JSON.parse(localStorage.getItem('tactical_favs') || '[]');
 
         function calculerAzimutMilliemes(lat1, lon1, lat2, lon2) {
             const toRad = (deg) => (deg * Math.PI) / 180;
@@ -124,6 +141,15 @@
                             clickMgrs = `Lat: ${clickLat.toFixed(5)}, Lon: ${clickLng.toFixed(5)}`;
                         }
 
+                        // Échappement des coordonnées pour injection propre dans la fonction globale
+                        const latStr = clickLat;
+                        const lngStr = clickLng;
+                        const mStr = clickMgrs;
+
+                        const popupContent = `<b>Point Cliqué</b><br>MGRS: ${clickMgrs}<br>` +
+                            `<button class="btn-action" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button> ` +
+                            `<button class="btn-action btn-save" onclick="sauvegarderPoint(${latStr}, ${lngStr}, '${mStr}')">⭐ Sauvegarder</button>`;
+
                         if (!pointA || (pointA && pointB)) {
                             if (markerA) map.removeLayer(markerA);
                             if (markerB) map.removeLayer(markerB);
@@ -133,7 +159,7 @@
                             pointA = [clickLat, clickLng];
 
                             markerA = L.marker(pointA).addTo(map)
-                                .bindPopup(`<b>Point A (Origine)</b><br>MGRS: ${clickMgrs}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`)
+                                .bindPopup(popupContent)
                                 .openPopup();
 
                             document.getElementById('status').innerHTML = `📍 <b>Point A :</b> ${clickMgrs}<br><span style="color:${isNightMode ? '#f55' : '#ff0'};">Cliquez pour poser Point B</span>`;
@@ -142,7 +168,7 @@
                             pointB = [clickLat, clickLng];
 
                             markerB = L.marker(pointB).addTo(map)
-                                .bindPopup(`<b>Point B (Cible)</b><br>MGRS: ${clickMgrs}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`)
+                                .bindPopup(popupContent)
                                 .openPopup();
 
                             const distanceMeters = map.distance(pointA, pointB);
@@ -160,7 +186,9 @@
 
                             const tacticalInfo = `<br><b>Distance A-B :</b> ${distanceStr}<br><b>Cap :</b> ${azimutMil} mil`;
                             
-                            markerB.setPopupContent(`<b>Point B (Cible)</b><br>${clickMgrs}${tacticalInfo}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`);
+                            markerB.setPopupContent(`<b>Point B (Cible)</b><br>${clickMgrs}${tacticalInfo}<br>` +
+                                `<button class="btn-action" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button> ` +
+                                `<button class="btn-action btn-save" onclick="sauvegarderPoint(${latStr}, ${lngStr}, '${mStr}')">⭐ Sauvegarder</button>`);
                             markerB.openPopup();
 
                             document.getElementById('status').innerHTML = `🎯 <b>A ➔ B :</b> ${distanceStr}<br><b>Cap :</b> ${azimutMil} mil`;
@@ -185,6 +213,51 @@
                 timeout: 10000,
                 maximumAge: 0
             });
+        }
+
+        function sauvegarderPoint(lat, lng, mgrsCode) {
+            const nom = prompt("Nom de ce point (ex: Point de ralliement, Source...):", "Point " + (favoris.length + 1));
+            if (!nom) return;
+
+            const nouveauPoint = { nom, lat, lng, mgrs: mgrsCode };
+            favoris.push(nouveauPoint);
+            localStorage.setItem('tactical_favs', JSON.stringify(favoris));
+            
+            mettreAJourAffichageFavoris();
+            alert("Point sauvegardé avec succès !");
+        }
+
+        function mettreAJourAffichageFavoris() {
+            const listeDiv = document.getElementById('favorites-list');
+            if (favoris.length === 0) {
+                listeDiv.innerHTML = "Aucun point";
+                return;
+            }
+
+            let html = "";
+            favoris.forEach((pt, index) => {
+                html += `<div class="fav-item">
+                    <span style="cursor:pointer;" onclick="centrerSurPoint(${pt.lat}, ${pt.lng})"><b>${pt.nom}</b><br>${pt.mgrs}</span>
+                    <button onclick="supprimerFavoris(${index})">❌</button>
+                </div>`;
+            });
+            listeDiv.innerHTML = html;
+        }
+
+        function centrerSurPoint(lat, lng) {
+            map.setView([lat, lng], 18);
+        }
+
+        function supprimerFavoris(index) {
+            favoris.splice(index, 1);
+            localStorage.setItem('tactical_favs', JSON.stringify(favoris));
+            mettreAJourAffichageFavoris();
+        }
+
+        function basculerPanneauFavoris() {
+            const panel = document.getElementById('favorites-panel');
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+            mettreAJourAffichageFavoris();
         }
 
         function basculerModeNuit() {
@@ -212,11 +285,17 @@
                     map.removeLayer(searchMarker);
                 }
 
+                const latStr = lat;
+                const lngStr = lng;
+                const mStr = inputVal.toUpperCase();
+
                 searchMarker = L.marker([lat, lng]).addTo(map)
-                    .bindPopup(`<b>Objectif Recherché</b><br>MGRS: ${inputVal.toUpperCase()}<br><button class="btn-copy" onclick="copierTexte('${inputVal.toUpperCase()}')">Copier MGRS</button>`)
+                    .bindPopup(`<b>Objectif Recherché</b><br>MGRS: ${mStr}<br>` +
+                        `<button class="btn-action" onclick="copierTexte('${mStr}')">Copier MGRS</button> ` +
+                        `<button class="btn-action btn-save" onclick="sauvegarderPoint(${latStr}, ${lngStr}, '${mStr}')">⭐ Sauvegarder</button>`)
                     .openPopup();
 
-                document.getElementById('status').innerHTML = `🔍 <b>Trouvé :</b><br><span style="font-size:11px;">${inputVal.toUpperCase()}</span>`;
+                document.getElementById('status').innerHTML = `🔍 <b>Trouvé :</b><br><span style="font-size:11px;">${mStr}</span>`;
 
             } catch (err) {
                 alert("Code MGRS invalide ou mal formaté !");
@@ -243,7 +322,10 @@
             });
         }
 
-        window.onload = initialiserCarte;
+        window.onload = function() {
+            initialiserCarte();
+            mettreAJourAffichageFavoris();
+        };
     </script>
 </body>
 </html>
