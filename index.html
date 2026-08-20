@@ -16,7 +16,7 @@
         #map { width: 100%; height: 100%; transition: filter 0.3s ease; }
         
         /* Panneau d'état fixé en haut à droite */
-        #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 10px 14px; border-radius: 8px; border: 1px solid #0f0; max-width: 280px; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); line-height: 1.4; }
+        #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 10px 14px; border-radius: 8px; border: 1px solid #0f0; max-width: 290px; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); line-height: 1.4; }
         #search-container { margin-top: 8px; display: flex; gap: 5px; }
         #search-input { background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px; border-radius: 4px; font-size: 12px; width: 160px; outline: none; text-transform: uppercase; }
         #search-btn { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
@@ -25,6 +25,7 @@
         #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 60px; height: 60px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 26px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
         #btn-night { position: absolute; bottom: 100px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
         #btn-fav { position: absolute; bottom: 155px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        #btn-reset-route { position: absolute; bottom: 210px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #f55; color: #fff; border-radius: 50%; border: none; font-size: 18px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
         
         /* Boutons d'action dans les popups */
         .btn-action { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px; font-size: 11px; display: inline-block; }
@@ -43,6 +44,7 @@
         body.night-mode #btn-pos { background: #f00; color: #fff; }
         body.night-mode #btn-night { background: #f00; color: #fff; }
         body.night-mode #btn-fav { background: #f00; color: #fff; }
+        body.night-mode #btn-reset-route { background: #900; color: #fff; }
         body.night-mode #favorites-panel { background: rgba(20,0,0,0.95); color: #f00; border-color: #f00; }
         body.night-mode .btn-action { background: #f00; color: #fff; }
         body.night-mode .btn-save { background: #fa0; color: #000; }
@@ -64,6 +66,7 @@
     </div>
     
     <div id="map"></div>
+    <button id="btn-reset-route" onclick="effacerItineraire()" title="Effacer l'itinéraire">🗑️</button>
     <button id="btn-fav" onclick="basculerPanneauFavoris()" title="Voir les favoris">⭐</button>
     <button id="btn-night" onclick="basculerModeNuit()" title="Mode nuit">🌙</button>
     <button id="btn-pos" onclick="centrerSurGPS()" title="Recentrer GPS">🎯</button>
@@ -75,11 +78,9 @@
         let userMarker = null;
         let circle = null;
         
-        let pointA = null;
-        let pointB = null;
-        let markerA = null;
-        let markerB = null;
-        let lineAB = null;
+        let cheminementPoints = []; // Stocke les [lat, lng] du tracé
+        let cheminementMarkers = []; // Stocke les marqueurs affichés
+        let polylineRoute = null; // Ligne reliant les points
         let searchMarker = null;
         let isNightMode = false;
         let favoris = JSON.parse(localStorage.getItem('tactical_favs') || '[]');
@@ -141,57 +142,50 @@
                             clickMgrs = `Lat: ${clickLat.toFixed(5)}, Lon: ${clickLng.toFixed(5)}`;
                         }
 
-                        // Échappement des coordonnées pour injection propre dans la fonction globale
-                        const latStr = clickLat;
-                        const lngStr = clickLng;
-                        const mStr = clickMgrs;
+                        // Ajouter le point au cheminement
+                        cheminementPoints.push([clickLat, clickLng]);
+                        const pointIndex = cheminementPoints.length;
 
-                        const popupContent = `<b>Point Cliqué</b><br>MGRS: ${clickMgrs}<br>` +
+                        const popupContent = `<b>Jalon #${pointIndex}</b><br>MGRS: ${clickMgrs}<br>` +
                             `<button class="btn-action" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button> ` +
-                            `<button class="btn-action btn-save" onclick="sauvegarderPoint(${latStr}, ${lngStr}, '${mStr}')">⭐ Sauvegarder</button>`;
+                            `<button class="btn-action btn-save" onclick="sauvegarderPoint(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder</button>`;
 
-                        if (!pointA || (pointA && pointB)) {
-                            if (markerA) map.removeLayer(markerA);
-                            if (markerB) map.removeLayer(markerB);
-                            if (lineAB) map.removeLayer(lineAB);
-                            
-                            pointB = null;
-                            pointA = [clickLat, clickLng];
+                        const marker = L.marker([clickLat, clickLng]).addTo(map)
+                            .bindPopup(popupContent)
+                            .openPopup();
+                        cheminementMarkers.push(marker);
 
-                            markerA = L.marker(pointA).addTo(map)
-                                .bindPopup(popupContent)
-                                .openPopup();
-
-                            document.getElementById('status').innerHTML = `📍 <b>Point A :</b> ${clickMgrs}<br><span style="color:${isNightMode ? '#f55' : '#ff0'};">Cliquez pour poser Point B</span>`;
-                        
+                        // Mettre à jour la polyligne
+                        if (polylineRoute) {
+                            polylineRoute.setLatLngs(cheminementPoints);
                         } else {
-                            pointB = [clickLat, clickLng];
-
-                            markerB = L.marker(pointB).addTo(map)
-                                .bindPopup(popupContent)
-                                .openPopup();
-
-                            const distanceMeters = map.distance(pointA, pointB);
-                            let distanceStr = distanceMeters >= 1000 ? 
-                                `${(distanceMeters / 1000).toFixed(2)} km` : 
-                                `${Math.round(distanceMeters)} m`;
-
-                            const azimutMil = calculerAzimutMilliemes(pointA[0], pointA[1], pointB[0], pointB[1]);
-
-                            lineAB = L.polyline([pointA, pointB], {
+                            polylineRoute = L.polyline(cheminementPoints, {
                                 color: isNightMode ? '#f00' : '#ff0',
                                 weight: 3,
                                 dashArray: '5, 5'
                             }).addTo(map);
+                        }
 
-                            const tacticalInfo = `<br><b>Distance A-B :</b> ${distanceStr}<br><b>Cap :</b> ${azimutMil} mil`;
-                            
-                            markerB.setPopupContent(`<b>Point B (Cible)</b><br>${clickMgrs}${tacticalInfo}<br>` +
-                                `<button class="btn-action" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button> ` +
-                                `<button class="btn-action btn-save" onclick="sauvegarderPoint(${latStr}, ${lngStr}, '${mStr}')">⭐ Sauvegarder</button>`);
-                            markerB.openPopup();
+                        // Calculs de distance et cap si on a au moins 2 points
+                        if (cheminementPoints.length >= 2) {
+                            let distanceTotale = 0;
+                            for (let i = 0; i < cheminementPoints.length - 1; i++) {
+                                distanceTotale += map.distance(cheminementPoints[i], cheminementPoints[i+1]);
+                            }
 
-                            document.getElementById('status').innerHTML = `🎯 <b>A ➔ B :</b> ${distanceStr}<br><b>Cap :</b> ${azimutMil} mil`;
+                            const dernierPt = cheminementPoints[cheminementPoints.length - 2];
+                            const avantDernierPt = cheminementPoints[cheminementPoints.length - 1];
+                            const distanceEtape = map.distance(dernierPt, avantDernierPt);
+                            const azimutMil = calculerAzimutMilliemes(dernierPt[0], dernierPt[1], avantDernierPt[0], avantDernierPt[1]);
+
+                            let distTotStr = distanceTotale >= 1000 ? `${(distanceTotale / 1000).toFixed(2)} km` : `${Math.round(distanceTotale)} m`;
+                            let distEtapStr = distanceEtape >= 1000 ? `${(distanceEtape / 1000).toFixed(2)} km` : `${Math.round(distanceEtape)} m`;
+
+                            document.getElementById('status').innerHTML = `📍 <b>Jalon #${pointIndex} posé</b><br>` +
+                                `Étape : ${distEtapStr} | Cap : ${azimutMil} mil<br>` +
+                                `<b style="color:${isNightMode ? '#f88' : '#7ff'};">Total cumulé : ${distTotStr}</b>`;
+                        } else {
+                            document.getElementById('status').innerHTML = `📍 <b>Départ (Jalon #1)</b><br><span style="font-size:11px;">${clickMgrs}</span><br><span style="color:${isNightMode ? '#f55' : '#ff0'};">Cliquez pour jalon suivant</span>`;
                         }
                     });
                 }
@@ -204,7 +198,9 @@
                 userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position GPS</b><br>MGRS: ${mgrsCoord}`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: isNightMode ? '#f00' : '#0f0', fillColor: isNightMode ? '#f00' : '#0f0', fillOpacity: 0.15 }).addTo(map);
 
-                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b><br><span style="font-size:11px;">${mgrsCoord}</span>`;
+                if (cheminementPoints.length === 0) {
+                    document.getElementById('status').innerHTML = `📍 <b>GPS OK</b><br><span style="font-size:11px;">${mgrsCoord}</span>`;
+                }
 
             }, error => {
                 alert("Erreur GPS : Activez la localisation.");
@@ -215,8 +211,19 @@
             });
         }
 
+        function effacerItineraire() {
+            cheminementMarkers.forEach(m => map.removeLayer(m));
+            cheminementMarkers = [];
+            cheminementPoints = [];
+            if (polylineRoute) {
+                map.removeLayer(polylineRoute);
+                polylineRoute = null;
+            }
+            document.getElementById('status').innerHTML = `🗑️ <b>Itinéraire effacé</b><br><span style="font-size:11px;">Cliquez pour un nouveau tracé</span>`;
+        }
+
         function sauvegarderPoint(lat, lng, mgrsCode) {
-            const nom = prompt("Nom de ce point (ex: Point de ralliement, Source...):", "Point " + (favoris.length + 1));
+            const nom = prompt("Nom de ce point (ex: Balise 1, PC...):", "Point " + (favoris.length + 1));
             if (!nom) return;
 
             const nouveauPoint = { nom, lat, lng, mgrs: mgrsCode };
@@ -265,6 +272,11 @@
             document.body.classList.toggle('night-mode', isNightMode);
             const btnNight = document.getElementById('btn-night');
             btnNight.innerText = isNightMode ? "☀️" : "🌙";
+            
+            // Mettre à jour la couleur de la polyligne existante si besoin
+            if (polylineRoute) {
+                polylineRoute.setStyle({ color: isNightMode ? '#f00' : '#ff0' });
+            }
         }
 
         function rechercherMGRS() {
@@ -285,14 +297,11 @@
                     map.removeLayer(searchMarker);
                 }
 
-                const latStr = lat;
-                const lngStr = lng;
                 const mStr = inputVal.toUpperCase();
-
                 searchMarker = L.marker([lat, lng]).addTo(map)
                     .bindPopup(`<b>Objectif Recherché</b><br>MGRS: ${mStr}<br>` +
                         `<button class="btn-action" onclick="copierTexte('${mStr}')">Copier MGRS</button> ` +
-                        `<button class="btn-action btn-save" onclick="sauvegarderPoint(${latStr}, ${lngStr}, '${mStr}')">⭐ Sauvegarder</button>`)
+                        `<button class="btn-action btn-save" onclick="sauvegarderPoint(${lat}, ${lng}, '${mStr}')">⭐ Sauvegarder</button>`)
                     .openPopup();
 
                 document.getElementById('status').innerHTML = `🔍 <b>Trouvé :</b><br><span style="font-size:11px;">${mStr}</span>`;
