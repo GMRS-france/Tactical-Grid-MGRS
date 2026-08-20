@@ -3,56 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tactical Grid MGRS</title>
+    <title>Tactical Grid MGRS France</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mgrs/1.0.0/mgrs.min.js"></script>
+    <!-- MGRS Library (via jsDelivr - ultra stable) -->
+    <script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js"></script>
     <style>
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
         #map { width: 100%; height: 100%; }
-        #status-container { position: absolute; top: 10px; left: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 15px; border-radius: 8px; border: 1px solid #0f0; max-width: 90%; font-size: 14px; }
-        #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 65px; height: 65px; background: #0f0; border-radius: 50%; border: none; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        #status-container { position: absolute; top: 10px; left: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 15px; border-radius: 8px; border: 1px solid #0f0; max-width: 90%; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 65px; height: 65px; background: #0f0; border-radius: 50%; border: none; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
-    <div id="status-container"><div id="status">Chargement...</div></div>
+    <div id="status-container"><div id="status">Étape 1 : Acquisition GPS...</div></div>
     <div id="map"></div>
-    <button id="btn-pos" onclick="maPosition()">🎯</button>
+    <button id="btn-pos" onclick="lancerProcessusTactique()">🎯</button>
 
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map').setView([48.5, 2.5], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}inspect/{x}/{y}.png', { maxZoom: 19 }); // Fallback safe
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        let map = null;
+        let marker = null;
+        let circle = null;
 
-        let marker, circle;
+        function lancerProcessusTactique() {
+            document.getElementById('status').innerText = "Étape 1 : Recherche de la position GPS...";
 
-        function maPosition() {
-            document.getElementById('status').innerText = "Recherche GPS...";
-            navigator.geolocation.getCurrentPosition(pos => {
-                const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-                let mgrsResult = "";
+            if (!navigator.geolocation) {
+                alert("La géolocalisation n'est pas supportée par votre appareil.");
+                return;
+            }
+
+            // 1. On récupère d'abord la position brute de l'appareil
+            navigator.geolocation.getCurrentPosition(position => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const accuracy = position.coords.accuracy;
+
+                document.getElementById('status').innerText = "Étape 2 : Conversion en MGRS...";
+
+                let mgrsCoord = "";
                 
+                // 2. On convertit cette position en MGRS grâce à la librairie chargée
                 try {
-                    if (typeof mgrs === 'undefined') {
-                        throw new Error("La librairie MGRS n'est pas chargée.");
+                    if (typeof mgrs !== 'undefined') {
+                        mgrsCoord = mgrs.forward([lng, lat], 5);
+                    } else {
+                        throw new Error("Librairie MGRS introuvable");
                     }
-                    // Test de conversion standard
-                    mgrsResult = mgrs.forward([lng, lat]);
-                } catch(e) {
-                    mgrsResult = "Erreur technique : " + e.message;
+                } catch (e) {
+                    // Sécurité de secours si la conversion échoue
+                    mgrsCoord = `Lat: ${lat.toFixed(5)}, Lon: ${lng.toFixed(5)}`;
                 }
 
-                if (marker) { map.removeLayer(marker); map.removeLayer(circle); }
-                marker = L.marker([lat, lng]).addTo(map).bindPopup("MGRS: " + mgrsResult).openPopup();
-                circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillOpacity: 0.2 }).addTo(map);
-                map.setView([lat, lng], 17);
-                
-                document.getElementById('status').innerHTML = `📍 <b>${mgrsResult}</b><br><small style="color:#ccc;">GPS : ${lat.toFixed(4)}, ${lng.toFixed(4)} (±${Math.round(accuracy)}m)</small>`;
-            }, err => {
-                document.getElementById('status').innerHTML = `<span style="color:#ff5555;">Erreur GPS : ${err.message}</span>`;
-            }, { enableHighAccuracy: true, timeout: 10000 });
+                document.getElementById('status').innerText = "Étape 3 : Affichage sur la carte...";
+
+                // 3. On initialise ou actualise la carte et les marqueurs avec les coordonnées obtenues
+                if (!map) {
+                    map = L.map('map').setView([lat, lng], 17);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: 'Map data © OpenStreetMap'
+                    }).addTo(map);
+                } else {
+                    map.setView([lat, lng], 17);
+                }
+
+                if (marker) {
+                    map.removeLayer(marker);
+                    map.removeLayer(circle);
+                }
+
+                marker = L.marker([lat, lng]).addTo(map).bindPopup("<b>Position Tactique</b><br>MGRS: " + mgrsCoord).openPopup();
+                circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.2 }).addTo(map);
+
+                // Affichage final propre dans le bandeau tactique
+                document.getElementById('status').innerHTML = `📍 <b>${mgrsCoord}</b><br><span style="color:#ccc; font-size:12px;">Précision GPS : ±${Math.round(accuracy)}m</span>`;
+
+            }, error => {
+                document.getElementById('status').innerHTML = `<span style="color:#ff5555;">Erreur GPS : Activez la localisation.</span>`;
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
         }
-        window.onload = maPosition;
+
+        // Lancement séquentiel automatique au chargement de la page
+        window.onload = function() {
+            lancerProcessusTactique();
+        };
     </script>
 </body>
 </html>
