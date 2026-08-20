@@ -89,15 +89,15 @@
     <div id="help-modal">
         <div class="modal-content">
             <button class="close-modal" onclick="basculerModalAide()">Fermer ✕</button>
-            <h2>📖 Cours Complet : Le Système MGRS</h2>
+            <h2>📖 Cours Technique : Le Système MGRS & Orientation</h2>
             
-            <p><i>Le MGRS (Military Grid Reference System) est le standard géographique de l'OTAN. Il fonctionne en mètres pour mesurer des distances directement sur le terrain.</i></p>
+            <p><i>Le MGRS (Military Grid Reference System) est le standard géographique de l'OTAN. Il fonctionne en mètres pour mesurer des distances directement sur une carte.</i></p>
 
             <h3>1. Décomposition d'une coordonnée</h3>
             <p>Exemple type : <b>31U DQ 4825 1290</b> (se lit strictement de gauche à droite)</p>
             <ul>
                 <li><b>Le Fuseau (ex: 31U) :</b> Grande zone géographique de base. La France métropolitaine est principalement sur les fuseaux 31T, 31U, 30T ou 32T.</li>
-                <li><b>Le Carré de 100 km (ex: DQ) :</b> Désigné par deux lettres, il repère le grand secteur sur la carte d'état-major.</li>
+                <li><b>Le Carré de 100 km (ex: DQ) :</b> Désigné par deux lettres, il repère le grand secteur sur la carte.</li>
                 <li><b>La Coordonnée Métrique (ex: 4825 1290) :</b> Nombre pair de chiffres. 
                     <br>👉 <i>Règle d'or :</i> <b>"On lit d'abord l'avenue (axe horizontal / vers l'Est), puis on monte dans l'immeuble (axe vertical / vers le Nord)."</b>
                 </li>
@@ -118,12 +118,12 @@
                 <tr>
                     <td>4 chiffres (482 129)</td>
                     <td>1 kilomètre</td>
-                    <td>Carré de base de la carte IGN</td>
+                    <td>Carré de base de la carte</td>
                 </tr>
                 <tr>
                     <td>6 chiffres (4825 1290)</td>
                     <td>100 mètres</td>
-                    <td><b>Standard tactique (ralliement, obstacle)</b></td>
+                    <td><b>Standard de base (point, position)</b></td>
                 </tr>
                 <tr>
                     <td>8 chiffres (48256 12903)</td>
@@ -132,14 +132,16 @@
                 </tr>
             </table>
 
-            <h3>3. Méthode pour trouver un point (à 6 chiffres)</h3>
-            <p>Pour le point <b>DQ 482 129</b> :</p>
-            <ol>
-                <li>Repérer le carré de 100 km <b>DQ</b> sur la carte.</li>
-                <li>Chercher la ligne horizontale vers l'Est correspondant aux 3 premiers chiffres (<b>482</b>).</li>
-                <li>Chercher la ligne verticale vers le Nord correspondant aux 3 chiffres suivants (<b>129</b>).</li>
-                <li>L'intersection donne le coin inférieur gauche du carré de 100m.</li>
-            </ol>
+            <h3>3. Utiliser les millièmes d'artillerie</h3>
+            <p>En topographie militaire, on n'utilise pas les degrés (360°) mais le <b>millième</b> (le cercle complet en compte <b>6400</b>).</p>
+            <ul>
+                <li><b>Principe de base :</b> 1 millième correspond approximativement à l'angle sous lequel on voit un objet de 1 mètre de large à 1 kilomètre de distance ($1\text{ m à } 1000\text{ m}$).</li>
+                <li><b>La formule du site et de la distance (règle des millièmes) :</b> 
+                    $$\text{Taille} = \frac{\text{Distance} \times \text{Millièmes}}{1000}$$
+                    <i>Exemple :</i> Si un pont mesure 50 mètres de large et qu'il occupe une largeur de 25 millièmes dans tes jumelles, sa distance est de $(50 \times 1000) / 25 = 2000$ mètres (soit 2 km).
+                </li>
+                <li><b>Avantage tactique :</b> Permet d'estimer rapidement des distances ou des dimensions directement sur le terrain sans calculatrice.</li>
+            </ul>
         </div>
     </div>
     
