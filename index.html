@@ -25,7 +25,8 @@
         #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 60px; height: 60px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 26px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
         #btn-night { position: absolute; bottom: 100px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
         #btn-fav { position: absolute; bottom: 155px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        #btn-reset-route { position: absolute; bottom: 210px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #f55; color: #fff; border-radius: 50%; border: none; font-size: 18px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        #btn-help { position: absolute; bottom: 210px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0aa; color: #fff; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        #btn-reset-route { position: absolute; bottom: 265px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #f55; color: #fff; border-radius: 50%; border: none; font-size: 18px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
         
         /* Boutons d'action dans les popups */
         .btn-action { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px; font-size: 11px; display: inline-block; }
@@ -39,6 +40,13 @@
         .fav-item span:hover { color: #fff; }
         .fav-item button { background: none; border: none; color: #f55; cursor: pointer; font-weight: bold; font-size: 14px; }
 
+        /* Fenêtre Modale de Cours (MGRS) */
+        #help-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: #111; color: #0f0; border: 2px solid #0f0; border-radius: 10px; width: 85%; max-width: 600px; max-height: 80vh; overflow-y: auto; padding: 20px; box-shadow: 0 5px 20px rgba(0,255,0,0.3); font-size: 13px; line-height: 1.5; }
+        .modal-content h2 { color: #fff; border-bottom: 1px solid #0f0; padding-bottom: 5px; margin-top: 0; }
+        .modal-content h3 { color: #ff0; margin-top: 15px; }
+        .close-modal { background: #f55; color: #fff; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; float: right; font-size: 14px; }
+
         /* --- MODE NUIT (INFRAROUGE) --- */
         body.night-mode { background-color: #000; }
         body.night-mode #status-container { background: rgba(20,0,0,0.95); color: #f00; border-color: #f00; }
@@ -47,8 +55,12 @@
         body.night-mode #btn-pos { background: #f00; color: #fff; }
         body.night-mode #btn-night { background: #f00; color: #fff; }
         body.night-mode #btn-fav { background: #f00; color: #fff; }
+        body.night-mode #btn-help { background: #900; color: #fff; }
         body.night-mode #btn-reset-route { background: #900; color: #fff; }
         body.night-mode #favorites-panel { background: rgba(20,0,0,0.95); color: #f00; border-color: #f00; }
+        body.night-mode .modal-content { background: #100; color: #f88; border-color: #f00; }
+        body.night-mode .modal-content h2 { color: #fff; border-color: #f00; }
+        body.night-mode .modal-content h3 { color: #ffa0a0; }
         body.night-mode .btn-action { background: #f00; color: #fff; }
         body.night-mode .btn-save { background: #fa0; color: #000; }
         body.night-mode .btn-del { background: #900; color: #fff; }
@@ -68,9 +80,39 @@
         <b>⭐ Points Sauvegardés</b>
         <div id="favorites-list">Aucun point</div>
     </div>
+
+    <!-- Modale du Cours MGRS -->
+    <div id="help-modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="basculerModalAide()">Fermer ✕</button>
+            <h2>📖 Guide MGRS & Tactique</h2>
+            
+            <h3>1. Structure d'un code MGRS</h3>
+            <p>Un code complet (ex: <b>31U DQ 4825 1290</b>) se lit toujours de gauche à droite :</p>
+            <ul>
+                <li><b>Fuseau (ex: 31U) :</b> La grande zone géographique.</li>
+                <li><b>Carré 100km (ex: DQ) :</b> Repérage sur la carte d'état-major.</li>
+                <li><b>Chiffres (ex: 4825 1290) :</b> La précision métrique. <i>Règle : "On lit d'abord l'avenue (axe horizontal), puis on monte dans l'immeuble (axe vertical)".</i></li>
+            </ul>
+
+            <h3>2. Niveau de précision</h3>
+            <ul>
+                <li><b>4 chiffres (ex: 48 12) :</b> Précision à 1 km (le carré de base de la carte).</li>
+                <li><b>6 chiffres (ex: 482 129) :</b> Précision à 100 m (point de ralliement).</li>
+                <li><b>8 chiffres (ex: 4825 1290) :</b> Précision à 10 m (position GPS précise).</li>
+            </ul>
+
+            <h3>3. Astuces du Chef de Patrouille</h3>
+            <ul>
+                <li><b>La boussole physique :</b> Ne dépend pas des batteries et reste l'outil le plus rapide pour tenir un cap sur le terrain.</li>
+                <li><b>Kilomètre-Effort (KE) :</b> Combine distance et dénivelé ($KE = Dist + D+/125 + D-/400$). Compter une base de 4 KE/h en marche chargée.</li>
+            </ul>
+        </div>
+    </div>
     
     <div id="map"></div>
     <button id="btn-reset-route" onclick="effacerItineraire()" title="Effacer l'itinéraire">🗑️</button>
+    <button id="btn-help" onclick="basculerModalAide()" title="Cours / Aide MGRS">❓</button>
     <button id="btn-fav" onclick="basculerPanneauFavoris()" title="Voir les favoris">⭐</button>
     <button id="btn-night" onclick="basculerModeNuit()" title="Mode nuit">🌙</button>
     <button id="btn-pos" onclick="centrerSurGPS()" title="Recentrer GPS">🎯</button>
@@ -161,7 +203,6 @@
                         document.getElementById('status').innerHTML = `⏳ <i>Calcul altitude jalon...</i>`;
 
                         const alt = await getAltitude(clickLat, clickLng);
-
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
                         
                         cheminementPoints.push({ lat: clickLat, lng: clickLng, alt: alt, mgrs: clickMgrs, marker: marker });
@@ -192,7 +233,6 @@
             });
         }
 
-        // Met à jour la ligne, les stats et rafraîchit les popups de chaque jalon avec le bon index
         function mettreAJourItineraire() {
             const latLngsArray = cheminementPoints.map(p => [p.lat, p.lng]);
 
@@ -206,7 +246,6 @@
                 }).addTo(map);
             }
 
-            // Met à jour les popups dynamiquement avec l'index actuel
             cheminementPoints.forEach((pt, index) => {
                 const popupContent = `<b>Jalon #${index + 1}</b><br>MGRS: ${pt.mgrs}<br>Alt: ${Math.round(pt.alt)}m<br>` +
                     `<button class="btn-action" onclick="copierTexte('${pt.mgrs}')">Copier MGRS</button> ` +
@@ -257,7 +296,6 @@
             }
         }
 
-        // Supprimer un jalon précis du tableau
         function supprimerJalon(index) {
             const pt = cheminementPoints[index];
             if (pt && pt.marker) {
@@ -336,6 +374,11 @@
             const panel = document.getElementById('favorites-panel');
             panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
             mettreAJourAffichageFavoris();
+        }
+
+        function basculerModalAide() {
+            const modal = document.getElementById('help-modal');
+            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
         }
 
         function basculerModeNuit() {
