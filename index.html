@@ -12,28 +12,30 @@
     <!-- MGRS Library -->
     <script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js"></script>
     <style>
-        html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
+        html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; }
         #map { width: 100%; height: 100%; transition: filter 0.3s ease; }
         
-        /* Panneau d'état en haut à droite */
-        #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 12px; border-radius: 8px; border: 1px solid #0f0; max-width: 90%; font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        /* Panneau d'état fixé solidement en haut à droite */
+        #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 10px 14px; border-radius: 8px; border: 1px solid #0f0; max-width: 280px; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); line-height: 1.4; }
         #search-container { margin-top: 8px; display: flex; gap: 5px; }
         #search-input { background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px; border-radius: 4px; font-size: 12px; width: 160px; outline: none; text-transform: uppercase; }
         #search-btn { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
         
         /* Boutons flottants en bas à droite */
-        #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 65px; height: 65px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        #btn-night { position: absolute; bottom: 110px; right: 20px; z-index: 1000; width: 50px; height: 50px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 22px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        .btn-copy { background: #0f0; color: #000; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; }
+        #btn-pos { position: absolute; bottom: 30px; right: 20px; z-index: 1000; width: 60px; height: 60px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 26px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        #btn-night { position: absolute; bottom: 100px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        .btn-copy { background: #0f0; color: #000; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; font-size: 11px; }
 
         /* --- MODE NUIT (INFRAROUGE) --- */
-        body.night-mode #status-container { background: rgba(20,0,0,0.9); color: #f00; border-color: #f00; }
+        body.night-mode { background-color: #000; }
+        body.night-mode #status-container { background: rgba(20,0,0,0.95); color: #f00; border-color: #f00; }
         body.night-mode #search-input { background: #100; color: #f00; border-color: #f00; }
         body.night-mode #search-btn { background: #f00; color: #fff; }
         body.night-mode #btn-pos { background: #f00; color: #fff; }
         body.night-mode #btn-night { background: #f00; color: #fff; }
         body.night-mode .btn-copy { background: #f00; color: #fff; }
-        body.night-mode #map { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(180deg); }
+        /* Filtre agressif pour basculer les tuiles OSM en mode sombre/rouge */
+        body.night-mode #map { filter: brightness(0.5) invert(1) contrast(3) hue-rotate(180deg); }
     </style>
 </head>
 <body>
@@ -46,6 +48,7 @@
     </div>
     
     <div id="map"></div>
+    <!-- ID et fonction correctement liés -->
     <button id="btn-night" onclick="basculerModeNuit()">🌙</button>
     <button id="btn-pos" onclick="centrerSurGPS()">🎯</button>
 
@@ -133,7 +136,7 @@
                                 .bindPopup(`<b>Point A (Origine)</b><br>MGRS: ${clickMgrs}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`)
                                 .openPopup();
 
-                            document.getElementById('status').innerHTML = `📍 <b>Point A défini : ${clickMgrs}</b><br><span style="color:${isNightMode ? '#f55' : '#ff0'};">Cliquez pour poser le Point B</span>`;
+                            document.getElementById('status').innerHTML = `📍 <b>Point A :</b> ${clickMgrs}<br><span style="color:${isNightMode ? '#f55' : '#ff0'};">Cliquez pour poser Point B</span>`;
                         
                         } else {
                             pointB = [clickLat, clickLng];
@@ -160,7 +163,7 @@
                             markerB.setPopupContent(`<b>Point B (Cible)</b><br>${clickMgrs}${tacticalInfo}<br><button class="btn-copy" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button>`);
                             markerB.openPopup();
 
-                            document.getElementById('status').innerHTML = `🎯 <b>A ➔ B : ${distanceStr} | Cap : ${azimutMil} mil</b>`;
+                            document.getElementById('status').innerHTML = `🎯 <b>A ➔ B :</b> ${distanceStr}<br><b>Cap :</b> ${azimutMil} mil`;
                         }
                     });
                 }
@@ -172,6 +175,8 @@
 
                 userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position GPS</b><br>MGRS: ${mgrsCoord}`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: isNightMode ? '#f00' : '#0f0', fillColor: isNightMode ? '#f00' : '#0f0', fillOpacity: 0.15 }).addTo(map);
+
+                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b><br><span style="font-size:11px;">${mgrsCoord}</span>`;
 
             }, error => {
                 alert("Erreur GPS : Activez la localisation.");
@@ -211,7 +216,7 @@
                     .bindPopup(`<b>Objectif Recherché</b><br>MGRS: ${inputVal.toUpperCase()}<br><button class="btn-copy" onclick="copierTexte('${inputVal.toUpperCase()}')">Copier MGRS</button>`)
                     .openPopup();
 
-                document.getElementById('status').innerHTML = `🔍 <b>Trouvé : ${inputVal.toUpperCase()}</b>`;
+                document.getElementById('status').innerHTML = `🔍 <b>Trouvé :</b><br><span style="font-size:11px;">${inputVal.toUpperCase()}</span>`;
 
             } catch (err) {
                 alert("Code MGRS invalide ou mal formaté !");
