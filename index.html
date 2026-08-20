@@ -83,7 +83,6 @@
         let circle = null;
         
         let cheminementPoints = []; 
-        let cheminementMarkers = []; 
         let polylineRoute = null; 
         let searchMarker = null;
         let isNightMode = false;
@@ -163,21 +162,12 @@
 
                         const alt = await getAltitude(clickLat, clickLng);
 
-                        const pointIndex = cheminementPoints.length; // index du futur point
-
-                        const popupContent = `<b>Jalon #${pointIndex + 1}</b><br>MGRS: ${clickMgrs}<br>Alt: ${Math.round(alt)}m<br>` +
-                            `<button class="btn-action" onclick="copierTexte('${clickMgrs}')">Copier MGRS</button> ` +
-                            `<button class="btn-action btn-save" onclick="sauvegarderPoint(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder</button> ` +
-                            `<button class="btn-action btn-del" onclick="supprimerJalon(${pointIndex})">❌ Supprimer</button>`;
-
-                        const marker = L.marker([clickLat, clickLng]).addTo(map)
-                            .bindPopup(popupContent);
+                        const marker = L.marker([clickLat, clickLng]).addTo(map);
                         
-                        cheminementPoints.push({ lat: clickLat, lng: clickLng, alt: alt, marker: marker });
-                        cheminementMarkers.push(marker);
+                        cheminementPoints.push({ lat: clickLat, lng: clickLng, alt: alt, mgrs: clickMgrs, marker: marker });
 
-                        marker.openPopup();
                         mettreAJourItineraire();
+                        marker.openPopup();
                     });
                 }
 
@@ -202,7 +192,7 @@
             });
         }
 
-        // Met à jour la ligne et les stats globales du cheminement
+        // Met à jour la ligne, les stats et rafraîchit les popups de chaque jalon avec le bon index
         function mettreAJourItineraire() {
             const latLngsArray = cheminementPoints.map(p => [p.lat, p.lng]);
 
@@ -215,6 +205,16 @@
                     dashArray: '5, 5'
                 }).addTo(map);
             }
+
+            // Met à jour les popups dynamiquement avec l'index actuel
+            cheminementPoints.forEach((pt, index) => {
+                const popupContent = `<b>Jalon #${index + 1}</b><br>MGRS: ${pt.mgrs}<br>Alt: ${Math.round(pt.alt)}m<br>` +
+                    `<button class="btn-action" onclick="copierTexte('${pt.mgrs}')">Copier MGRS</button> ` +
+                    `<button class="btn-action btn-save" onclick="sauvegarderPoint(${pt.lat}, ${pt.lng}, '${pt.mgrs}')">⭐ Sauvegarder</button> ` +
+                    `<button class="btn-action btn-del" onclick="supprimerJalon(${index})">❌ Supprimer</button>`;
+                
+                pt.marker.bindPopup(popupContent);
+            });
 
             if (cheminementPoints.length >= 2) {
                 let distanceTotale = 0;
@@ -314,7 +314,6 @@
             listeDiv.innerHTML = html;
         }
 
-        // Se téléporter sur un point favori et ouvrir sa popup
         function teleporterSurPoint(lat, lng, nom, mgrsCode) {
             map.setView([lat, lng], 18);
             
