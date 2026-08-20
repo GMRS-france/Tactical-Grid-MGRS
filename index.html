@@ -28,11 +28,11 @@
         let marker = null;
         let circle = null;
         let clickMarker = null;
-        let line = null; // Ligne de visée
+        let line = null;
         let userPos = null;
 
-        // Fonction pour calculer l'azimut (cap en degrés) entre deux points GPS
-        function calculerAzimut(lat1, lon1, lat2, lon2) {
+        // Fonction pour calculer l'azimut en millièmes d'artillerie (6400 mil = 360°)
+        function calculerAzimutMilliemes(lat1, lon1, lat2, lon2) {
             const toRad = (deg) => (deg * Math.PI) / 180;
             const toDeg = (rad) => (rad * 180) / Math.PI;
 
@@ -45,7 +45,12 @@
             
             let brng = Math.atan2(y, x);
             brng = toDeg(brng);
-            return Math.round((brng + 360) % 360);
+            let azimutDeg = (brng + 360) % 360;
+
+            let azimutMil = Math.round((azimutDeg * 6400) / 360);
+            if (azimutMil >= 6400) azimutMil = 0;
+            
+            return azimutMil;
         }
 
         function lancerProcessusTactique() {
@@ -77,7 +82,6 @@
                         attribution: 'Map data © OpenStreetMap'
                     }).addTo(map);
 
-                    // Écouteur de clic pour analyser une cible avec distance et azimut
                     map.on('click', function(e) {
                         const clickLat = e.latlng.lat;
                         const clickLng = e.latlng.lng;
@@ -94,18 +98,15 @@
 
                         let tacticalInfo = "";
                         if (userPos) {
-                            // Calcul de la distance
                             const distanceMeters = map.distance(userPos, [clickLat, clickLng]);
                             let distanceStr = distanceMeters >= 1000 ? 
                                 `${(distanceMeters / 1000).toFixed(2)} km` : 
                                 `${Math.round(distanceMeters)} m`;
 
-                            // Calcul de l'azimut (cap)
-                            const azimut = calculerAzimut(userPos[0], userPos[1], clickLat, clickLng);
+                            const azimutMil = calculerAzimutMilliemes(userPos[0], userPos[1], clickLat, clickLng);
 
-                            tacticalInfo = `<br><b>Distance :</b> ${distanceStr}<br><b>Cap (Azimut) :</b> ${azimut}°`;
+                            tacticalInfo = `<br><b>Distance :</b> ${distanceStr}<br><b>Cap :</b> ${azimutMil} mil`;
 
-                            // Tracé d'une ligne jaune entre l'utilisateur et la cible
                             line = L.polyline([userPos, [clickLat, clickLng]], {
                                 color: '#ff0',
                                 weight: 3,
