@@ -4,125 +4,76 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tactical Grid MGRS France</title>
-    <link rel="manifest" href="manifest.json">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#000000">
+
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js"></script>
+    
     <style>
-        html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; }
-        #map { width: 100%; height: 100%; transition: filter 0.3s ease; }
-        
-        #status-container { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.85); color: #0f0; padding: 10px 14px; border-radius: 8px; border: 1px solid #0f0; width: 280px; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); line-height: 1.4; }
-        #search-container { margin-top: 8px; display: flex; gap: 5px; }
-        #search-input { background: #111; color: #0f0; border: 1px solid #0f0; padding: 5px; border-radius: 4px; font-size: 12px; width: 180px; outline: none; text-transform: uppercase; }
-        #search-btn { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
-        
-        #btn-pos { position: absolute; bottom: 20px; right: 20px; z-index: 1000; width: 55px; height: 55px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        #btn-night { position: absolute; bottom: 85px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        #btn-fav { position: absolute; bottom: 140px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0f0; color: #000; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-        #btn-help { position: absolute; bottom: 195px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #0aa; color: #fff; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        #btn-reset-route { position: absolute; bottom: 250px; right: 20px; z-index: 1000; width: 45px; height: 45px; background: #f55; color: #fff; border-radius: 50%; border: none; font-size: 18px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        
-        .btn-action { background: #0f0; color: #000; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px; font-size: 11px; display: inline-block; }
-        .btn-save { background: #ff0; color: #000; }
-        .btn-del { background: #f55; color: #fff; }
-
-        #favorites-panel { position: absolute; top: 130px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.9); color: #0f0; padding: 10px; border-radius: 8px; border: 1px solid #0f0; width: 260px; max-height: 200px; overflow-y: auto; display: none; font-size: 11px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        .fav-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding: 4px 0; }
-        .fav-item span { cursor: pointer; flex-grow: 1; }
-        .fav-item span:hover { color: #fff; }
-        .fav-item button { background: none; border: none; color: #f55; cursor: pointer; font-weight: bold; font-size: 14px; }
-
-        #help-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; }
-        .modal-content { background: #111; color: #0f0; border: 2px solid #0f0; border-radius: 10px; width: 90%; max-width: 650px; max-height: 85vh; overflow-y: auto; padding: 20px; box-shadow: 0 5px 20px rgba(0,255,0,0.3); font-size: 13px; line-height: 1.5; }
-        .modal-content h2 { color: #fff; border-bottom: 1px solid #0f0; padding-bottom: 5px; margin-top: 0; }
-        .modal-content h3 { color: #ff0; margin-top: 20px; border-left: 3px solid #ff0; padding-left: 8px; }
-        .modal-content table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-        .modal-content th, .modal-content td { border: 1px solid #333; padding: 6px; text-align: left; }
-        .modal-content th { background: #1a1a1a; color: #0f0; }
-        .close-modal { background: #f55; color: #fff; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; float: right; font-size: 14px; }
-
-        body.night-mode { background-color: #000; }
-        body.night-mode #status-container { background: rgba(20,0,0,0.95); color: #f00; border-color: #f00; }
-        body.night-mode #search-input { background: #100; color: #f00; border-color: #f00; }
-        body.night-mode #search-btn { background: #f00; color: #fff; }
-        body.night-mode #btn-pos, body.night-mode #btn-night, body.night-mode #btn-fav { background: #f00; color: #fff; }
-        body.night-mode #btn-help, body.night-mode #btn-reset-route { background: #900; color: #fff; }
-        body.night-mode #favorites-panel { background: rgba(20,0,0,0.95); color: #f00; border-color: #f00; }
-        body.night-mode .modal-content { background: #100; color: #f88; border-color: #f00; }
-        body.night-mode .modal-content h2 { color: #fff; border-color: #f00; }
-        body.night-mode .modal-content h3 { color: #ffa0a0; border-left-color: #f00; }
-        body.night-mode .modal-content th { background: #200; color: #f00; }
-        body.night-mode .btn-action { background: #f00; color: #fff; }
-        body.night-mode .btn-save { background: #fa0; color: #000; }
-        body.night-mode .btn-del { background: #900; color: #fff; }
-        body.night-mode #map { filter: brightness(0.5) invert(1) contrast(3) hue-rotate(180deg); }
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        #map {
+            height: calc(100vh - 120px);
+            width: 100%;
+        }
+        #panel {
+            height: 120px;
+            background: #1e1e1e;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            border-top: 2px solid #333;
+        }
+        .btn-ctrl {
+            background: #2ea44f;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-ctrl:active {
+            background: #2c974b;
+        }
+        #status {
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
-    <div id="status-container">
-        <div id="status">Acquisition GPS...</div>
-        <div id="search-container">
-            <input type="text" id="search-input" placeholder="Ex: 30TWN123456">
-            <button id="search-btn" onclick="rechercherMGRS()">Chercher</button>
-        </div>
-    </div>
 
-    <div id="favorites-panel">
-        <b>⭐ Points Sauvegardés</b>
-        <div id="favorites-list">Aucun point</div>
-    </div>
-
-    <div id="help-modal">
-        <div class="modal-content">
-            <button class="close-modal" onclick="basculerModalAide()">Fermer ✕</button>
-            <h2>📖 Cours Complet : Le Système MGRS</h2>
-            <p><i>Le MGRS (Military Grid Reference System) est le standard géographique de l'OTAN. Il fonctionne en mètres pour mesurer des distances directement sur le terrain.</i></p>
-            <h3>1. Décomposition d'une coordonnée</h3>
-            <p>Exemple type : <b>31U DQ 4825 1290</b> (se lit strictement de gauche à droite)</p>
-            <ul>
-                <li><b>Le Fuseau (ex: 31U) :</b> Grande zone géographique de base. La France métropolitaine est principalement sur les fuseaux 31T, 31U, 30T ou 32T.</li>
-                <li><b>Le Carré de 100 km (ex: DQ) :</b> Désigné par deux lettres, il repère le grand secteur sur la carte d'état-major.</li>
-                <li><b>La Coordonnée Métrique (ex: 4825 1290) :</b> Nombre pair de chiffres. 
-                    <br>👉 <i>Règle d'or :</i> <b>"On lit d'abord l'avenue (axe horizontal / vers l'Est), puis on monte dans l'immeuble (axe vertical / vers le Nord)."</b>
-                </li>
-            </ul>
-            <h3>2. Les Niveaux de Précision</h3>
-            <table>
-                <tr><th>Chiffres</th><th>Précision</th><th>Usage</th></tr>
-                <tr><td>2 chiffres (48 12)</td><td>10 kilomètres</td><td>Vaste région / secteur global</td></tr>
-                <tr><td>4 chiffres (482 129)</td><td>1 kilomètre</td><td>Carré de base de la carte IGN</td></tr>
-                <tr><td>6 chiffres (4825 1290)</td><td>100 mètres</td><td><b>Standard tactique (ralliement, obstacle)</b></td></tr>
-                <tr><td>8 chiffres (48256 12903)</td><td>10 mètres</td><td>Position GPS précise (bâtiment)</td></tr>
-            </table>
-            <h3>3. Méthode pour trouver un point (à 6 chiffres)</h3>
-            <p>Pour le point <b>DQ 482 129</b> :</p>
-            <ol>
-                <li>Repérer le carré de 100 km <b>DQ</b> sur la carte.</li>
-                <li>Chercher la ligne horizontale vers l'Est correspondant aux 3 premiers chiffres (<b>482</b>).</li>
-                <li>Chercher la ligne verticale vers le Nord correspondant aux 3 chiffres suivants (<b>129</b>).</li>
-                <li>L'intersection donne le coin inférieur gauche du carré de 100m.</li>
-            </ol>
-        </div>
-    </div>
-    
     <div id="map"></div>
-    <button id="btn-reset-route" onclick="effacerItineraire()" title="Effacer l'itinéraire">🗑️</button>
-    <button id="btn-help" onclick="basculerModalAide()" title="Cours / Aide MGRS">❓</button>
-    <button id="btn-fav" onclick="basculerPanneauFavoris()" title="Voir les favoris">⭐</button>
-    <button id="btn-night" onclick="basculerModeNuit()" title="Mode nuit">🌙</button>
-    <button id="btn-pos" onclick="centrerSurGPS()" title="Recentrer GPS">🎯</button>
 
+    <div id="panel">
+        <div id="status">📍 Initialisation du GPS...</div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-ctrl" onclick="centrerSurGPS()">Centrer GPS</button>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- MGRS JS -->
+    <script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js"></script>
+
     <script>
         let map = null;
         let userMarker = null;
         let circle = null;
-        let cheminementPoints = []; 
-        let polylineRoute = null; 
-        let searchMarker = null;
+        let cheminementPoints = [];
         let isNightMode = false;
-        let favoris = JSON.parse(localStorage.getItem('tactical_favs') || '[]');
 
         async function getAltitude(lat, lng) {
             try {
@@ -133,24 +84,9 @@
             return 0;
         }
 
-        function calculerCaps(lat1, lon1, lat2, lon2) {
-            const toRad = (deg) => (deg * Math.PI) / 180;
-            const toDeg = (rad) => (rad * 180) / Math.PI;
-            const dLon = toRad(lon2 - lon1);
-            const phi1 = toRad(lat1);
-            const phi2 = toRad(lat2);
-            const y = Math.sin(dLon) * Math.cos(phi2);
-            const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
-            let brng = toDeg(Math.atan2(y, x));
-            let azimutDeg = Math.round((brng + 360) % 360);
-            let azimutMil = Math.round((azimutDeg * 6400) / 360);
-            if (azimutMil >= 6400) azimutMil = 0;
-            return { deg: azimutDeg, mil: azimutMil };
-        }
-
         function initialiserCarte() {
             if (!navigator.geolocation) {
-                alert("La géolocalisation n'est pas supportée.");
+                alert("La géolocalisation n'est pas supportée par votre navigateur.");
                 return;
             }
 
@@ -167,11 +103,34 @@
                 }
 
                 if (!map) {
-                    map = L.map('map').setView([lat, lng], 17);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    // Fonds de carte
+                    const plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         maxZoom: 19,
-                        attribution: 'Map data © OpenStreetMap'
-                    }).addTo(map);
+                        attribution: '© OpenStreetMap'
+                    });
+
+                    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 19,
+                        attribution: '© Esri'
+                    });
+
+                    const ign = L.tileLayer('https://wxs.ign.fr/choisirgeoportail/geoportail/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/jpeg&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', {
+                        maxZoom: 19,
+                        attribution: '© IGN'
+                    });
+
+                    // Initialisation de la carte avec le Plan par défaut
+                    map = L.map('map', {
+                        layers: [plan]
+                    }).setView([lat, lng], 17);
+
+                    // Bouton de sélection des couches (Plan / Satellite / IGN)
+                    const baseMaps = {
+                        "Plan": plan,
+                        "Satellite": satellite,
+                        "IGN": ign
+                    };
+                    L.control.layers(baseMaps).addTo(map);
 
                     map.on('click', async function(e) {
                         const clickLat = e.latlng.lat;
@@ -183,12 +142,12 @@
                             clickMgrs = "Coordonnée complexe";
                         }
 
-                        document.getElementById('status').innerHTML = `⏳ <i>Calcul altitude jalon...</i>`;
+                        document.getElementById('status').innerHTML = `⏳ <i>Calcul altitude...</i>`;
                         const alt = await getAltitude(clickLat, clickLng);
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
                         cheminementPoints.push({ lat: clickLat, lng: clickLng, alt: alt, mgrs: clickMgrs, marker: marker });
-                        mettreAJourItineraire();
-                        marker.openPopup();
+                        
+                        document.getElementById('status').innerHTML = `📍 <b>Point ajouté</b><br><span style="font-size:11px;">${clickMgrs}</span>`;
                     });
                 }
 
@@ -197,154 +156,27 @@
                     map.removeLayer(circle);
                 }
 
-                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position GPS</b><br>MGRS: ${mgrsCoord}`).openPopup();
-                circle = L.circle([lat, lng], { radius: accuracy, color: isNightMode ? '#f00' : '#0f0', fillColor: isNightMode ? '#f00' : '#0f0', fillOpacity: 0.15 }).addTo(map);
+                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}`).openPopup();
+                circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
 
-                if (cheminementPoints.length === 0) {
-                    document.getElementById('status').innerHTML = `📍 <b>GPS OK</b><br><span style="font-size:11px;">${mgrsCoord}</span>`;
-                }
+                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b><br><span style="font-size:11px;">${mgrsCoord}</span>`;
+
             }, error => {
-                document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b><br><span style="font-size:11px;">Vérifiez la localisation</span>`;
+                document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b><br><span style="font-size:11px;">Vérifiez les permissions</span>`;
             }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
         }
 
-        function mettreAJourItineraire() {
-            const latLngsArray = cheminementPoints.map(p => [p.lat, p.lng]);
-            if (polylineRoute) {
-                polylineRoute.setLatLngs(latLngsArray);
-            } else if (latLngsArray.length > 0) {
-                polylineRoute = L.polyline(latLngsArray, { color: isNightMode ? '#f00' : '#ff0', weight: 3, dashArray: '5, 5' }).addTo(map);
-            }
-
-            cheminementPoints.forEach((pt, index) => {
-                const popupContent = `<b>Jalon #${index + 1}</b><br>MGRS: ${pt.mgrs}<br>Alt: ${Math.round(pt.alt)}m<br>` +
-                    `<button class="btn-action" onclick="copierTexte('${pt.mgrs}')">Copier MGRS</button> ` +
-                    `<button class="btn-action btn-save" onclick="sauvegarderPoint(${pt.lat}, ${pt.lng}, '${pt.mgrs}')">⭐ Sauvegarder</button> ` +
-                    `<button class="btn-action btn-del" onclick="supprimerJalon(${index})">❌ Supprimer</button>`;
-                pt.marker.bindPopup(popupContent);
-            });
-
-            if (cheminementPoints.length >= 2) {
-                let distanceTotale = 0, Dplus = 0, Dmoins = 0;
-                for (let i = 0; i < cheminementPoints.length - 1; i++) {
-                    const p1 = cheminementPoints[i], p2 = cheminementPoints[i+1];
-                    distanceTotale += map.distance([p1.lat, p1.lng], [p2.lat, p2.lng]);
-                    const deltaAlt = p2.alt - p1.alt;
-                    if (deltaAlt > 0) Dplus += deltaAlt;
-                    else Dmoins += Math.abs(deltaAlt);
-                }
-                const dernierPt = cheminementPoints[cheminementPoints.length - 2];
-                const avantDernierPt = cheminementPoints[cheminementPoints.length - 1];
-                const distanceEtape = map.distance([dernierPt.lat, dernierPt.lng], [avantDernierPt.lat, avantDernierPt.lng]);
-                const caps = calculerCaps(dernierPt.lat, dernierPt.lng, avantDernierPt.lat, avantDernierPt.lng);
-
-                const KE = (distanceTotale / 1000) + (Dplus / 125) + (Dmoins / 400);
-                const tempsHeures = KE / 4; 
-                const heures = Math.floor(tempsHeures);
-                const minutes = Math.round((tempsHeures - heures) * 60);
-                const tempsStr = heures > 0 ? `${heures}h${minutes < 10 ? '0' : ''}${minutes}` : `${minutes} min`;
-
-                let distTotStr = distanceTotale >= 1000 ? `${(distanceTotale / 1000).toFixed(2)} km` : `${Math.round(distanceTotale)} m`;
-                let distEtapStr = distanceEtape >= 1000 ? `${(distanceEtape / 1000).toFixed(2)} km` : `${Math.round(distanceEtape)} m`;
-
-                document.getElementById('status').innerHTML = `📍 <b>Parcours : ${cheminementPoints.length} jalons</b><br>` +
-                    `Étape : ${distEtapStr} | Cap : <b>${caps.deg}°</b> (${caps.mil} mil)<br>` +
-                    `Total : ${distTotStr} | 📈 D+:${Math.round(Dplus)}m 📉 D-:${Math.round(Dmoins)}m<br>` +
-                    `<b style="color:${isNightMode ? '#f88' : '#7ff'};">KE: ${KE.toFixed(1)} | Est. ${tempsStr}</b>`;
-            } else if (cheminementPoints.length === 1) {
-                document.getElementById('status').innerHTML = `📍 <b>Départ (Jalon #1)</b> - ${Math.round(cheminementPoints[0].alt)}m`;
-            }
-        }
-
-        function supprimerJalon(index) {
-            if (cheminementPoints[index]?.marker) map.removeLayer(cheminementPoints[index].marker);
-            cheminementPoints.splice(index, 1);
-            if (cheminementPoints.length === 0 && polylineRoute) {
-                map.removeLayer(polylineRoute);
-                polylineRoute = null;
-            }
-            mettreAJourItineraire();
-        }
-
-        function effacerItineraire() {
-            cheminementPoints.forEach(p => { if (p.marker) map.removeLayer(p.marker); });
-            cheminementPoints = [];
-            if (polylineRoute) { map.removeLayer(polylineRoute); polylineRoute = null; }
-            document.getElementById('status').innerHTML = `🗑️ <b>Itinéraire effacé</b>`;
-        }
-
-        function sauvegarderPoint(lat, lng, mgrsCode) {
-            const nom = prompt("Nom de ce point (ex: Balise 1, PC...):", "Point " + (favoris.length + 1));
-            if (!nom) return;
-            favoris.push({ nom, lat, lng, mgrs: mgrsCode });
-            localStorage.setItem('tactical_favs', JSON.stringify(favoris));
-            mettreAJourAffichageFavoris();
-            alert("Point sauvegardé !");
-        }
-
-        function mettreAJourAffichageFavoris() {
-            const listeDiv = document.getElementById('favorites-list');
-            if (favoris.length === 0) { listeDiv.innerHTML = "Aucun point"; return; }
-            let html = "";
-            favoris.forEach((pt, index) => {
-                html += `<div class="fav-item"><span onclick="map.setView([${pt.lat}, ${pt.lng}], 18)"><b>${pt.nom}</b><br>${pt.mgrs}</span><button onclick="supprimerFavoris(${index})">×</button></div>`;
-            });
-            listeDiv.innerHTML = html;
-        }
-
-        function supprimerFavoris(index) {
-            favoris.splice(index, 1);
-            localStorage.setItem('tactical_favs', JSON.stringify(favoris));
-            mettreAJourAffichageFavoris();
-        }
-
-        function basculerPanneauFavoris() {
-            const panel = document.getElementById('favorites-panel');
-            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-            mettreAJourAffichageFavoris();
-        }
-
-        function basculerModalAide() {
-            const modal = document.getElementById('help-modal');
-            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
-        }
-
-        function basculerModeNuit() {
-            isNightMode = !isNightMode;
-            document.body.classList.toggle('night-mode', isNightMode);
-            document.getElementById('btn-night').innerText = isNightMode ? "☀️" : "🌙";
-            if (polylineRoute) polylineRoute.setStyle({ color: isNightMode ? '#f00' : '#ff0' });
-        }
-
-        function rechercherMGRS() {
-            const inputVal = document.getElementById('search-input').value.trim();
-            if (!inputVal) return alert("Entrez un code MGRS.");
-            try {
-                const latLon = mgrs.inverse(inputVal);
-                map.setView([latLon[1], latLon[0]], 17);
-                if (searchMarker) map.removeLayer(searchMarker);
-                searchMarker = L.marker([latLon[1], latLon[0]]).addTo(map)
-                    .bindPopup(`<b>Objectif</b><br>MGRS: ${inputVal.toUpperCase()}<br><button class="btn-action btn-save" onclick="sauvegarderPoint(${latLon[1]}, ${latLon[0]}, '${inputVal.toUpperCase()}')">⭐ Sauvegarder</button>`)
-                    .openPopup();
-                document.getElementById('status').innerHTML = `🔍 <b>Trouvé :</b> ${inputVal.toUpperCase()}`;
-            } catch (err) {
-                alert("Code MGRS invalide !");
-            }
-        }
-
         function centrerSurGPS() {
-            navigator.geolocation.getCurrentPosition(pos => {
-                map.setView([pos.coords.latitude, pos.coords.longitude], 17);
+            navigator.geolocation.getCurrentPosition(position => {
+                map.setView([position.coords.latitude, position.coords.longitude], 17);
             });
-        }
-
-        function copierTexte(texte) {
-            navigator.clipboard.writeText(texte).then(() => alert("Copié : " + texte));
         }
 
         window.onload = function() {
             initialiserCarte();
-            mettreAJourAffichageFavoris();
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js');
+            }
         };
     </script>
 </body>
