@@ -36,22 +36,22 @@
             transition: background 0.3s, color 0.3s;
         }
         #map {
-            height: calc(100vh - 200px);
+            height: calc(100vh - 210px);
             width: 100%;
         }
-        /* Filtre pour assombrir la carte en mode nuit */
         body.night-mode .leaflet-tile-pane {
             filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg);
         }
         #panel {
-            height: 200px;
+            height: 210px;
             background: var(--panel-bg);
-            padding: 10px;
+            padding: 8px 12px;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
             justify-content: space-around;
             border-top: 2px solid var(--border-color);
+            overflow-y: auto;
         }
         .btn-ctrl {
             background: var(--accent-color);
@@ -61,7 +61,7 @@
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 11px;
         }
         .search-box {
             display: flex;
@@ -69,14 +69,15 @@
         }
         .search-box input {
             flex: 1;
-            padding: 5px;
+            padding: 4px 8px;
             border-radius: 4px;
             border: 1px solid var(--border-color);
             background: #2a2a2a;
             color: white;
+            font-size: 12px;
         }
         #status {
-            font-size: 12px;
+            font-size: 11px;
         }
         .btn-action {
             background: #0366d6;
@@ -85,7 +86,8 @@
             padding: 4px 8px;
             border-radius: 3px;
             cursor: pointer;
-            margin-top: 5px;
+            margin-top: 4px;
+            font-size: 11px;
         }
     </style>
 </head>
@@ -96,7 +98,6 @@
     <div id="panel">
         <div id="status">📍 Initialisation du GPS...</div>
         
-        <!-- Moteur de recherche MGRS -->
         <div class="search-box">
             <input type="text" id="mgrsSearchInput" placeholder="Rechercher MGRS (ex: 30UXT...)">
             <button class="btn-ctrl" onclick="rechercherMGRS()">Chercher</button>
@@ -106,10 +107,11 @@
             <button class="btn-ctrl" onclick="centrerSurGPS()">Centrer GPS</button>
             <button class="btn-ctrl" onclick="basculerModeNuit()" style="background: #444;">🌙 Mode Nuit</button>
             <button class="btn-ctrl" onclick="effacerPoints()" style="background: #d73a49;">Effacer Tracé</button>
+            <button class="btn-ctrl" onclick="voirFavoris()" style="background: #d29922;">⭐ Favoris (<span id="fav-count">0</span>)</button>
         </div>
 
-        <div style="font-size: 11px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser un jalon, calculer la distance et voir ses coordonnées MGRS.</i>
+        <div style="font-size: 10px; opacity: 0.8;">
+            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les angles (Milliés / Degrés) et enregistrer vos favoris.</i>
         </div>
     </div>
 
@@ -126,6 +128,33 @@
         let cheminementPoints = [];
         let polylineRoute = null;
         let isNightMode = false;
+        let favoris = JSON.parse(localStorage.getItem('tactical_favs')) || [];
+
+        function calculerCaps(lat1, lon1, lat2, lon2) {
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const toDeg = (rad) => (rad * 180) / Math.PI;
+            const dLon = toRad(lon2 - lon1);
+            const phi1 = toRad(lat1);
+            const phi2 = toRad(lat2);
+            const y = Math.sin(dLon) * Math.cos(phi2);
+            const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+            let brng = toDeg(Math.atan2(y, x));
+            let azimutDeg = Math.round((brng + 360) % 360);
+            let azimutMil = Math.round((azimutDeg * 6400) / 360);
+            if (azimutMil >= 6400) azimutMil = 0;
+            return { deg: azimutDeg, mil: azimutMil };
+        }
+
+        function calculerDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Rayon de la terre en mètres
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2-lat1) * Math.PI/180;
+            const Δλ = (lon2-lon1) * Math.PI/180;
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return Math.round(R * c);
+        }
 
         async function getAltitude(lat, lng) {
             try {
@@ -169,13 +198,9 @@
                         layers: [plan]
                     }).setView([lat, lng], 17);
 
-                    const baseMaps = {
-                        "Plan": plan,
-                        "Satellite": satellite
-                    };
+                    const baseMaps = { "Plan": plan, "Satellite": satellite };
                     L.control.layers(baseMaps).addTo(map);
 
-                    // Clic sur la carte pour poser un point et mesurer
                     map.on('click', async function(e) {
                         const clickLat = e.latlng.lat;
                         const clickLng = e.latlng.lng;
@@ -186,16 +211,32 @@
                             clickMgrs = "Coordonnée complexe";
                         }
 
-                        document.getElementById('status').innerHTML = `⏳ <i>Calcul altitude point...</i>`;
+                        document.getElementById('status').innerHTML = `⏳ <i>Calcul jalon...</i>`;
                         const alt = await getAltitude(clickLat, clickLng);
                         
+                        let infoSupplementaire = "";
+                        if (cheminementPoints.length > 0) {
+                            const dernierPoint = cheminementPoints[cheminementPoints.length - 1];
+                            const dist = calculerDistance(dernierPoint.lat, dernierPoint.lng, clickLat, clickLng);
+                            const cap = calculerCaps(dernierPoint.lat, dernierPoint.lng, clickLat, clickLng);
+                            infoSupplementaire = `<br>📏 Dist: ${dist}m<br>🎯 Cap: <b>${cap.mil} ‰</b> (${cap.deg}°)`;
+                        }
+
+                        const pointIndex = cheminementPoints.length;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
-                        marker.bindPopup(`<b>Jalon Posé</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m`).openPopup();
                         
-                        cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker });
+                        marker.bindPopup(`
+                            <b>Jalon #${pointIndex + 1}</b><br>
+                            MGRS: ${clickMgrs}<br>
+                            Alt: ${alt}m
+                            ${infoSupplementaire}<br>
+                            <button class="btn-action" onclick="sauvegarderFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder Favori</button>
+                        `).openPopup();
+                        
+                        cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker, mgrs: clickMgrs });
                         mettreAJourItineraire();
 
-                        document.getElementById('status').innerHTML = `📍 <b>Point Ajouté</b><br><span style="font-size:11px;">${clickMgrs}</span>`;
+                        document.getElementById('status').innerHTML = `📍 <b>Jalon #${pointIndex + 1} posé</b><br><span style="font-size:10px;">${clickMgrs}</span>`;
                     });
                 }
 
@@ -204,10 +245,11 @@
                     map.removeLayer(circle);
                 }
 
-                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}`).openPopup();
+                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position GPS</b><br>MGRS: ${mgrsCoord}`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
 
-                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b> (Précision: ~${Math.round(accuracy)}m)<br><span style="font-size:11px;">${mgrsCoord}</span>`;
+                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b> (~${Math.round(accuracy)}m)<br><span style="font-size:11px;">${mgrsCoord}</span>`;
+                mettreAJourAffichageFavoris();
 
             }, error => {
                 document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b> : Vérifiez les permissions.`;
@@ -227,6 +269,36 @@
             cheminementPoints = [];
             if (polylineRoute) map.removeLayer(polylineRoute);
             document.getElementById('status').innerHTML = `🗑️ Tracé effacé.`;
+        }
+
+        function sauvegarderFavori(lat, lng, mgrsText) {
+            favoris.push({ lat, lng, mgrs: mgrsText, date: new Date().toLocaleDateString() });
+            localStorage.setItem('tactical_favs', JSON.stringify(favoris));
+            mettreAJourAffichageFavoris();
+            alert(`Point enregistré dans les favoris !\n${mgrsText}`);
+        }
+
+        function mettreAJourAffichageFavoris() {
+            document.getElementById('fav-count').innerText = favoris.length;
+        }
+
+        function voirFavoris() {
+            if (favoris.length === 0) {
+                alert("Aucun favori enregistré pour l'instant.");
+                return;
+            }
+            let texte = "Vos Favoris:\n";
+            favoris.forEach((f, index) => {
+                texte += `${index + 1}. ${f.mgrs} (${f.date})\n`;
+            });
+            const choix = prompt(texte + "\nEntrez le numéro du favori à centrer sur la carte :");
+            if (choix && !isNaN(choix)) {
+                const index = parseInt(choix) - 1;
+                if (favoris[index]) {
+                    map.setView([favoris[index].lat, favoris[index].lng], 17);
+                    L.marker([favoris[index].lat, favoris[index].lng]).addTo(map).bindPopup(`<b>⭐ Favori</b><br>${favoris[index].mgrs}`).openPopup();
+                }
+            }
         }
 
         function centrerSurGPS() {
