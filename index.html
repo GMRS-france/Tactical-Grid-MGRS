@@ -124,7 +124,7 @@
         </div>
 
         <div style="font-size: 10px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps et nommer vos favoris.</i>
+            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps, dessiner des zones et nommer vos favoris.</i>
         </div>
     </div>
 
@@ -150,6 +150,7 @@
         let cheminementPoints = [];
         let polylineRoute = null;
         let favorisMarkers = [];
+        let cerclesZones = [];
         let isNightMode = false;
         let favoris = JSON.parse(localStorage.getItem('tactical_favs')) || [];
 
@@ -229,7 +230,18 @@
 
                         const pointIndex = cheminementPoints.length + 1;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
-                        marker.bindPopup(`<b>Jalon #${pointIndex}</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m${infoSupp}<br><button class="btn-action" onclick="demanderNomFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder</button>`).openPopup();
+                        
+                        // Popup enrichi avec gestion des zones / cercles de portée
+                        marker.bindPopup(`
+                            <b>Jalon #${pointIndex}</b><br>
+                            MGRS: ${clickMgrs}<br>
+                            Alt: ${alt}m${infoSupp}<br>
+                            <div style="margin-top:6px; border-top:1px solid #ccc; padding-top:4px;">
+                                <input type="number" id="rayonInput_${pointIndex}" placeholder="Rayon (m)" value="500" style="width:70px; padding:2px;">
+                                <button class="btn-action" onclick="ajouterCercleSurJalon(${clickLat}, ${clickLng}, ${pointIndex})">🎯 Zone</button>
+                            </div>
+                            <button class="btn-action" style="background:#d29922; margin-top:4px;" onclick="demanderNomFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder</button>
+                        `).openPopup();
                         
                         cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker, mgrs: clickMgrs });
                         mettreAJourItineraire();
@@ -244,6 +256,23 @@
                 afficherFavorisSurCarte();
                 mettreAJourAffichageFavoris();
             }, error => { document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b>`; }, { enableHighAccuracy: true });
+        }
+
+        function ajouterCercleSurJalon(lat, lng, pointIndex) {
+            const inputEl = document.getElementById(`rayonInput_${pointIndex}`);
+            const rayon = inputEl ? parseInt(inputEl.value) || 500 : 500;
+            
+            const cercle = L.circle([lat, lng], {
+                radius: rayon,
+                color: '#ff7800',
+                fillColor: '#ff7800',
+                fillOpacity: 0.2,
+                weight: 2
+            }).addTo(map);
+
+            cerclesZones.push(cercle);
+            map.closePopup();
+            document.getElementById('status').innerHTML = `🎯 <b>Zone de ${rayon}m ajoutée</b>`;
         }
 
         function afficherFavorisSurCarte() {
@@ -266,7 +295,12 @@
             cheminementPoints.forEach(p => map.removeLayer(p.marker));
             cheminementPoints = [];
             if (polylineRoute) map.removeLayer(polylineRoute);
-            document.getElementById('status').innerHTML = `🗑️ Tracé effacé.`;
+            
+            // Effacer aussi les cercles de zones
+            cerclesZones.forEach(c => map.removeLayer(c));
+            cerclesZones = [];
+
+            document.getElementById('status').innerHTML = `🗑️ Tracé et zones effacés.`;
         }
 
         function demanderNomFavori(lat, lng, mgrsText) {
@@ -279,6 +313,8 @@
             localStorage.setItem('tactical_favs', JSON.stringify(favoris));
             afficherFavorisSurCarte();
             mettreAJourAffichageFavoris();
+            map.closePopup();
+            document.getElementById('status').innerHTML = `⭐ <b>Favori "${nom}" sauvegardé</b>`;
         }
 
         function supprimerFavori(index) {
