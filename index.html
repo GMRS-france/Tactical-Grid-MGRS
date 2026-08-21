@@ -134,6 +134,15 @@
     <script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js"></script>
 
     <script>
+        // Enregistrement du Service Worker pour le mode Hors-Ligne
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((reg) => { console.log('SW enregistré:', reg.scope); })
+                    .catch((err) => { console.log('Échec SW:', err); });
+            });
+        }
+
         let map = null;
         let userMarker = null;
         let circle = null;
@@ -191,32 +200,15 @@
                 const accuracy = position.coords.accuracy;
 
                 let mgrsCoord = "Hors zone MGRS";
-                try {
-                    mgrsCoord = mgrs.forward([lng, lat], 5);
-                } catch (e) {
-                    mgrsCoord = `Lat:${lat.toFixed(4)} Lon:${lng.toFixed(4)}`;
-                }
+                try { mgrsCoord = mgrs.forward([lng, lat], 5); } catch (e) { mgrsCoord = `Lat:${lat.toFixed(4)} Lon:${lng.toFixed(4)}`; }
 
                 if (!map) {
-                    // Fonds de carte
                     const planOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSM' });
                     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' });
-                    
-                    // Fond IGN Standard (Géoplateforme)
-                    const ignScan = L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg', {
-                        maxZoom: 18,
-                        minZoom: 2,
-                        attribution: '© IGN / Géoplateforme'
-                    });
+                    const ignScan = L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg', { maxZoom: 18, attribution: '© IGN' });
 
                     map = L.map('map', { layers: [planOSM] }).setView([lat, lng], 17);
-                    
-                    const baseLayers = {
-                        "Plan OSM": planOSM,
-                        "IGN Topo": ignScan,
-                        "Satellite": satellite
-                    };
-                    L.control.layers(baseLayers).addTo(map);
+                    L.control.layers({ "Plan OSM": planOSM, "IGN Topo": ignScan, "Satellite": satellite }).addTo(map);
 
                     map.on('click', async function(e) {
                         const clickLat = e.latlng.lat;
@@ -237,8 +229,7 @@
 
                         const pointIndex = cheminementPoints.length + 1;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
-                        
-                        marker.bindPopup(`<b>Jalon #${pointIndex}</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m${infoSupp}<br><button class="btn-action" onclick="demanderNomFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder en Favori</button>`).openPopup();
+                        marker.bindPopup(`<b>Jalon #${pointIndex}</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m${infoSupp}<br><button class="btn-action" onclick="demanderNomFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder</button>`).openPopup();
                         
                         cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker, mgrs: clickMgrs });
                         mettreAJourItineraire();
@@ -249,26 +240,18 @@
                 if (userMarker) { map.removeLayer(userMarker); map.removeLayer(circle); }
                 userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
-                
-                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b> (~${Math.round(accuracy)}m)`;
-                
+                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b>`;
                 afficherFavorisSurCarte();
                 mettreAJourAffichageFavoris();
-
             }, error => { document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b>`; }, { enableHighAccuracy: true });
         }
 
         function afficherFavorisSurCarte() {
             favorisMarkers.forEach(m => map.removeLayer(m));
             favorisMarkers = [];
-
             favoris.forEach((f, index) => {
-                const favMarker = L.marker([f.lat, f.lng], {
-                    title: f.nom || `Favori: ${f.mgrs}`
-                }).addTo(map);
-
-                favMarker.bindPopup(`<b>⭐ ${f.nom || 'Favori'}</b><br>MGRS: ${f.mgrs}<br>Ajouté le: ${f.date || 'N/A'}<br><button class="btn-action" style="background:#d73a49;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>`);
-                
+                const favMarker = L.marker([f.lat, f.lng], { title: f.nom }).addTo(map);
+                favMarker.bindPopup(`<b>⭐ ${f.nom}</b><br>MGRS: ${f.mgrs}<br><button class="btn-action" style="background:#d73a49;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>`);
                 favorisMarkers.push(favMarker);
             });
         }
@@ -276,9 +259,7 @@
         function mettreAJourItineraire() {
             const latLngs = cheminementPoints.map(p => [p.lat, p.lng]);
             if (polylineRoute) map.removeLayer(polylineRoute);
-            if (latLngs.length > 1) {
-                polylineRoute = L.polyline(latLngs, { color: '#0055ff', weight: 4, opacity: 0.8 }).addTo(map);
-            }
+            if (latLngs.length > 1) polylineRoute = L.polyline(latLngs, { color: '#0055ff', weight: 4 }).addTo(map);
         }
 
         function effacerPoints() {
@@ -289,25 +270,15 @@
         }
 
         function demanderNomFavori(lat, lng, mgrsText) {
-            const nomPerso = prompt("Entrez un nom pour ce point favori :", `Point ${favoris.length + 1}`);
-            if (nomPerso !== null) {
-                sauvegarderFavori(lat, lng, mgrsText, nomPerso.trim() || `Point ${favoris.length + 1}`);
-            }
+            const nomPerso = prompt("Nom du favori :", `Point ${favoris.length + 1}`);
+            if (nomPerso !== null) sauvegarderFavori(lat, lng, mgrsText, nomPerso.trim());
         }
 
         function sauvegarderFavori(lat, lng, mgrsText, nom) {
-            const existe = favoris.some(f => f.lat === lat && f.lng === lng);
-            if (existe) {
-                alert("Ce point est déjà dans vos favoris !");
-                return;
-            }
-
             favoris.push({ lat, lng, mgrs: mgrsText, nom: nom, date: new Date().toLocaleDateString() });
             localStorage.setItem('tactical_favs', JSON.stringify(favoris));
-            
             afficherFavorisSurCarte();
             mettreAJourAffichageFavoris();
-            alert(`⭐ Favori "${nom}" sauvegardé avec succès !`);
         }
 
         function supprimerFavori(index) {
@@ -316,36 +287,25 @@
             afficherFavorisSurCarte();
             mettreAJourAffichageFavoris();
             map.closePopup();
-            alert("Favori supprimé.");
         }
 
-        function mettreAJourAffichageFavoris() { 
-            document.getElementById('fav-count').innerText = favoris.length; 
-        }
+        function mettreAJourAffichageFavoris() { document.getElementById('fav-count').innerText = favoris.length; }
 
         function voirFavoris() {
-            if (favoris.length === 0) { 
-                alert("Aucun favori enregistré pour le moment."); 
-                return; 
-            }
-            let t = "Vos Favoris :\n";
-            favoris.forEach((f, i) => t += `${i + 1}. ${f.nom} (${f.mgrs})\n`);
-            const choix = prompt(t + "\nEntrez le numéro du favori à centrer :");
+            if (favoris.length === 0) return alert("Aucun favori.");
+            let t = "Favoris :\n";
+            favoris.forEach((f, i) => t += `${i + 1}. ${f.nom}\n`);
+            const choix = prompt(t + "\nNuméro du favori à centrer :");
             if (choix) {
                 const index = parseInt(choix) - 1;
-                if (favoris[index] && favorisMarkers[index]) {
-                    const f = favoris[index];
-                    map.setView([f.lat, f.lng], 17);
+                if (favoris[index]) {
+                    map.setView([favoris[index].lat, favoris[index].lng], 17);
                     favorisMarkers[index].openPopup();
-                } else {
-                    alert("Numéro invalide.");
                 }
             }
         }
 
-        function centrerSurGPS() { 
-            navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 17)); 
-        }
+        function centrerSurGPS() { navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 17)); }
 
         function rechercherMGRS() {
             const val = document.getElementById('mgrsSearchInput').value.trim();
@@ -354,14 +314,10 @@
                 if (searchMarker) map.removeLayer(searchMarker);
                 searchMarker = L.marker([latLon[1], latLon[0]]).addTo(map);
                 map.setView([latLon[1], latLon[0]], 17);
-                searchMarker.bindPopup(`<b>Trouvé :</b> ${val}`).openPopup();
             } catch (err) { alert("Format MGRS invalide !"); }
         }
 
-        function basculerModeNuit() {
-            isNightMode = !isNightMode;
-            document.getElementById('body-main').classList.toggle('night-mode', isNightMode);
-        }
+        function basculerModeNuit() { isNightMode = !isNightMode; document.getElementById('body-main').classList.toggle('night-mode', isNightMode); }
 
         window.onload = function() { initialiserCarte(); };
     </script>
