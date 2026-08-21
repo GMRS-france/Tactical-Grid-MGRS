@@ -36,11 +36,15 @@
             transition: background 0.3s, color 0.3s;
         }
         #map {
-            height: calc(100vh - 180px);
+            height: calc(100vh - 200px);
             width: 100%;
         }
+        /* Filtre pour assombrir la carte en mode nuit */
+        body.night-mode .leaflet-tile-pane {
+            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg);
+        }
         #panel {
-            height: 180px;
+            height: 200px;
             background: var(--panel-bg);
             padding: 10px;
             box-sizing: border-box;
@@ -53,10 +57,11 @@
             background: var(--accent-color);
             color: white;
             border: none;
-            padding: 8px 12px;
+            padding: 6px 10px;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 12px;
         }
         .search-box {
             display: flex;
@@ -64,22 +69,23 @@
         }
         .search-box input {
             flex: 1;
-            padding: 6px;
+            padding: 5px;
             border-radius: 4px;
             border: 1px solid var(--border-color);
             background: #2a2a2a;
             color: white;
         }
         #status {
-            font-size: 13px;
+            font-size: 12px;
         }
-        #cours-section {
-            font-size: 11px;
-            max-height: 40px;
-            overflow-y: auto;
-            background: rgba(0,0,0,0.2);
-            padding: 4px;
-            border-radius: 4px;
+        .btn-action {
+            background: #0366d6;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 5px;
         }
     </style>
 </head>
@@ -96,14 +102,14 @@
             <button class="btn-ctrl" onclick="rechercherMGRS()">Chercher</button>
         </div>
 
-        <div style="display: flex; gap: 8px; align-items: center;">
+        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
             <button class="btn-ctrl" onclick="centrerSurGPS()">Centrer GPS</button>
-            <button class="btn-ctrl" onclick="basculerModeNuit()" style="background: #444;">🌙 Nuit</button>
+            <button class="btn-ctrl" onclick="basculerModeNuit()" style="background: #444;">🌙 Mode Nuit</button>
+            <button class="btn-ctrl" onclick="effacerPoints()" style="background: #d73a49;">Effacer Tracé</button>
         </div>
 
-        <!-- Aide / Cours MGRS & Millièmes -->
-        <div id="cours-section">
-            <b>Aide MGRS / Millièmes :</b> 1 millième (MIL) = angle sous-tendant 1m à 1km. Coordonnées MGRS lues de gauche à droite puis de bas en haut.
+        <div style="font-size: 11px; opacity: 0.8;">
+            💡 <i>Cliquez sur la carte pour poser un jalon, calculer la distance et voir ses coordonnées MGRS.</i>
         </div>
     </div>
 
@@ -117,7 +123,18 @@
         let userMarker = null;
         let circle = null;
         let searchMarker = null;
+        let cheminementPoints = [];
+        let polylineRoute = null;
         let isNightMode = false;
+
+        async function getAltitude(lat, lng) {
+            try {
+                const response = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lng}`);
+                const data = await response.json();
+                if (data && data.results && data.results.length > 0) return data.results[0].elevation;
+            } catch (e) {}
+            return 0;
+        }
 
         function initialiserCarte() {
             if (!navigator.geolocation) {
@@ -138,7 +155,6 @@
                 }
 
                 if (!map) {
-                    // Fonds de carte Plan & Satellite
                     const plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         maxZoom: 19,
                         attribution: '© OpenStreetMap'
@@ -158,6 +174,29 @@
                         "Satellite": satellite
                     };
                     L.control.layers(baseMaps).addTo(map);
+
+                    // Clic sur la carte pour poser un point et mesurer
+                    map.on('click', async function(e) {
+                        const clickLat = e.latlng.lat;
+                        const clickLng = e.latlng.lng;
+                        let clickMgrs = "";
+                        try {
+                            clickMgrs = mgrs.forward([clickLng, clickLat], 5);
+                        } catch (err) {
+                            clickMgrs = "Coordonnée complexe";
+                        }
+
+                        document.getElementById('status').innerHTML = `⏳ <i>Calcul altitude point...</i>`;
+                        const alt = await getAltitude(clickLat, clickLng);
+                        
+                        const marker = L.marker([clickLat, clickLng]).addTo(map);
+                        marker.bindPopup(`<b>Jalon Posé</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m`).openPopup();
+                        
+                        cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker });
+                        mettreAJourItineraire();
+
+                        document.getElementById('status').innerHTML = `📍 <b>Point Ajouté</b><br><span style="font-size:11px;">${clickMgrs}</span>`;
+                    });
                 }
 
                 if (userMarker) {
@@ -166,13 +205,28 @@
                 }
 
                 userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}`).openPopup();
-                circle = L.circle([lat, lng], { radius: accuracy, color: isNightMode ? '#f00' : '#0f0', fillColor: isNightMode ? '#f00' : '#0f0', fillOpacity: 0.15 }).addTo(map);
+                circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
 
-                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b> : <span style="font-size:11px;">${mgrsCoord}</span>`;
+                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b> (Précision: ~${Math.round(accuracy)}m)<br><span style="font-size:11px;">${mgrsCoord}</span>`;
 
             }, error => {
                 document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b> : Vérifiez les permissions.`;
             }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+        }
+
+        function mettreAJourItineraire() {
+            const latLngs = cheminementPoints.map(p => [p.lat, p.lng]);
+            if (polylineRoute) map.removeLayer(polylineRoute);
+            if (latLngs.length > 1) {
+                polylineRoute = L.polyline(latLngs, { color: 'blue', weight: 4 }).addTo(map);
+            }
+        }
+
+        function effacerPoints() {
+            cheminementPoints.forEach(p => map.removeLayer(p.marker));
+            cheminementPoints = [];
+            if (polylineRoute) map.removeLayer(polylineRoute);
+            document.getElementById('status').innerHTML = `🗑️ Tracé effacé.`;
         }
 
         function centrerSurGPS() {
