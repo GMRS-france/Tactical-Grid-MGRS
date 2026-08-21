@@ -121,10 +121,13 @@
             <button class="btn-ctrl" onclick="basculerModeNuit()" style="background: #444;">🌙 Mode Nuit</button>
             <button class="btn-ctrl" onclick="effacerPoints()" style="background: #d73a49;">Effacer Tracé</button>
             <button class="btn-ctrl" onclick="voirFavoris()" style="background: #d29922;">⭐ Favoris (<span id="fav-count">0</span>)</button>
+            <button class="btn-ctrl" onclick="exporterGeoJSON()" style="background: #0366d6;">💾 Exporter</button>
+            <button class="btn-ctrl" onclick="document.getElementById('importFile').click()" style="background: #6f42c1;">📂 Importer</button>
+            <input type="file" id="importFile" style="display: none;" accept=".geojson,.json" onchange="importerGeoJSON(event)">
         </div>
 
         <div style="font-size: 10px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps, dessiner des zones et nommer vos favoris.</i>
+            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps et gérer vos données.</i>
         </div>
     </div>
 
@@ -231,7 +234,6 @@
                         const pointIndex = cheminementPoints.length + 1;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
                         
-                        // Popup enrichi avec gestion des zones / cercles de portée
                         marker.bindPopup(`
                             <b>Jalon #${pointIndex}</b><br>
                             MGRS: ${clickMgrs}<br>
@@ -296,7 +298,6 @@
             cheminementPoints = [];
             if (polylineRoute) map.removeLayer(polylineRoute);
             
-            // Effacer aussi les cercles de zones
             cerclesZones.forEach(c => map.removeLayer(c));
             cerclesZones = [];
 
@@ -330,6 +331,7 @@
         function voirFavoris() {
             if (favoris.length === 0) return alert("Aucun favori.");
             let t = "Favoris :\n";
+            favoris.export?.forEach ? "" : null;
             favoris.forEach((f, i) => t += `${i + 1}. ${f.nom}\n`);
             const choix = prompt(t + "\nNuméro du favori à centrer :");
             if (choix) {
@@ -339,6 +341,90 @@
                     favorisMarkers[index].openPopup();
                 }
             }
+        }
+
+        // --- EXPORT GEOJSON ---
+        function exporterGeoJSON() {
+            let features = [];
+
+            // 1. Ajouter les jalons du tracé en cours
+            cheminementPoints.forEach((p, index) => {
+                features.push({
+                    type: "Feature",
+                    geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+                    properties: { type: "Jalon", name: `Jalon #${index + 1}`, mgrs: p.mgrs }
+                });
+            });
+
+            // 2. Ajouter la ligne de cheminement si elle existe
+            if (cheminementPoints.length > 1) {
+                features.push({
+                    type: "Feature",
+                    geometry: { type: "LineString", coordinates: cheminementPoints.map(p => [p.lng, p.lat]) },
+                    properties: { type: "Itineraire", name: "Tracé tactique" }
+                });
+            }
+
+            // 3. Ajouter les favoris enregistrés
+            favoris.forEach(f => {
+                features.push({
+                    type: "Feature",
+                    geometry: { type: "Point", coordinates: [f.lng, f.lat] },
+                    properties: { type: "Favori", name: f.nom, mgrs: f.mgrs }
+                });
+            });
+
+            const geojsonCollection = { type: "FeatureCollection", features: features };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geojsonCollection, null, 2));
+            
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "tactical_export.geojson");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+
+            document.getElementById('status').innerHTML = `💾 <b>Export réussi (.geojson)</b>`;
+        }
+
+        // --- IMPORT GEOJSON ---
+        function importerGeoJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const geojson = JSON.parse(e.target.result);
+                    let importedCount = 0;
+
+                    if (geojson.features) {
+                        geojson.features.forEach(feat => {
+                            if (feat.geometry && feat.geometry.type === "Point") {
+                                const coords = feat.geometry.coordinates; // [lng, lat]
+                                const props = feat.properties || {};
+                                const nom = props.name || "Point importé";
+                                const mgrsText = props.mgrs || "";
+
+                                // Si c'est un favori ou un jalon, on l'ajoute aux favoris et sur la carte
+                                favoris.push({ lat: coords[1], lng: coords[0], mgrs: mgrsText, nom: nom });
+                                importedCount++;
+                            }
+                        });
+                        localStorage.setItem('tactical_favs', JSON.stringify(favoris));
+                        afficherFavorisSurCarte();
+                        mettreAJourAffichageFavoris();
+                        document.getElementById('status').innerHTML = `📂 <b>${importedCount} éléments importés avec succès !</b>`;
+                    } else {
+                        alert("Format GeoJSON invalide.");
+                    }
+                } catch (err) {
+                    alert("Erreur lors de la lecture du fichier JSON.");
+                }
+                // Reset l'input file pour permettre de re-sélectionner le même fichier si besoin
+                event.target.value = "";
+            };
+            reader.readAsText(file);
         }
 
         function centrerSurGPS() { navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 17)); }
