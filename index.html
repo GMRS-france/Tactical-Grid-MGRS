@@ -124,7 +124,7 @@
         </div>
 
         <div style="font-size: 10px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps et enregistrer vos favoris.</i>
+            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps et nommer vos favoris.</i>
         </div>
     </div>
 
@@ -198,11 +198,25 @@
                 }
 
                 if (!map) {
-                    const plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSM' });
+                    // Fonds de carte
+                    const planOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSM' });
                     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' });
+                    
+                    // Fond IGN Standard (Géoplateforme)
+                    const ignScan = L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg', {
+                        maxZoom: 18,
+                        minZoom: 2,
+                        attribution: '© IGN / Géoplateforme'
+                    });
 
-                    map = L.map('map', { layers: [plan] }).setView([lat, lng], 17);
-                    L.control.layers({ "Plan": plan, "Satellite": satellite }).addTo(map);
+                    map = L.map('map', { layers: [planOSM] }).setView([lat, lng], 17);
+                    
+                    const baseLayers = {
+                        "Plan OSM": planOSM,
+                        "IGN Topo": ignScan,
+                        "Satellite": satellite
+                    };
+                    L.control.layers(baseLayers).addTo(map);
 
                     map.on('click', async function(e) {
                         const clickLat = e.latlng.lat;
@@ -224,8 +238,7 @@
                         const pointIndex = cheminementPoints.length + 1;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
                         
-                        // Popup avec option de sauvegarde en favori
-                        marker.bindPopup(`<b>Jalon #${pointIndex}</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m${infoSupp}<br><button class="btn-action" onclick="sauvegarderFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder en Favori</button>`).openPopup();
+                        marker.bindPopup(`<b>Jalon #${pointIndex}</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m${infoSupp}<br><button class="btn-action" onclick="demanderNomFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder en Favori</button>`).openPopup();
                         
                         cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker, mgrs: clickMgrs });
                         mettreAJourItineraire();
@@ -251,10 +264,10 @@
 
             favoris.forEach((f, index) => {
                 const favMarker = L.marker([f.lat, f.lng], {
-                    title: `Favori: ${f.mgrs}`
+                    title: f.nom || `Favori: ${f.mgrs}`
                 }).addTo(map);
 
-                favMarker.bindPopup(`<b>⭐ Favori #${index + 1}</b><br>MGRS: ${f.mgrs}<br>Ajouté le: ${f.date || 'N/A'}<br><button class="btn-action" style="background:#d73a49;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>`);
+                favMarker.bindPopup(`<b>⭐ ${f.nom || 'Favori'}</b><br>MGRS: ${f.mgrs}<br>Ajouté le: ${f.date || 'N/A'}<br><button class="btn-action" style="background:#d73a49;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>`);
                 
                 favorisMarkers.push(favMarker);
             });
@@ -275,19 +288,26 @@
             document.getElementById('status').innerHTML = `🗑️ Tracé effacé.`;
         }
 
-        function sauvegarderFavori(lat, lng, mgrsText) {
+        function demanderNomFavori(lat, lng, mgrsText) {
+            const nomPerso = prompt("Entrez un nom pour ce point favori :", `Point ${favoris.length + 1}`);
+            if (nomPerso !== null) {
+                sauvegarderFavori(lat, lng, mgrsText, nomPerso.trim() || `Point ${favoris.length + 1}`);
+            }
+        }
+
+        function sauvegarderFavori(lat, lng, mgrsText, nom) {
             const existe = favoris.some(f => f.lat === lat && f.lng === lng);
             if (existe) {
                 alert("Ce point est déjà dans vos favoris !");
                 return;
             }
 
-            favoris.push({ lat, lng, mgrs: mgrsText, date: new Date().toLocaleDateString() });
+            favoris.push({ lat, lng, mgrs: mgrsText, nom: nom, date: new Date().toLocaleDateString() });
             localStorage.setItem('tactical_favs', JSON.stringify(favoris));
             
             afficherFavorisSurCarte();
             mettreAJourAffichageFavoris();
-            alert(`⭐ Point sauvegardé dans les favoris !`);
+            alert(`⭐ Favori "${nom}" sauvegardé avec succès !`);
         }
 
         function supprimerFavori(index) {
@@ -308,8 +328,8 @@
                 alert("Aucun favori enregistré pour le moment."); 
                 return; 
             }
-            let t = "Vos Favoris:\n";
-            favoris.forEach((f, i) => t += `${i + 1}. ${f.mgrs}\n`);
+            let t = "Vos Favoris :\n";
+            favoris.forEach((f, i) => t += `${i + 1}. ${f.nom} (${f.mgrs})\n`);
             const choix = prompt(t + "\nEntrez le numéro du favori à centrer :");
             if (choix) {
                 const index = parseInt(choix) - 1;
