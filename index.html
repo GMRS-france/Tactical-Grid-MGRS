@@ -205,7 +205,13 @@
                 if (!map) {
                     const planOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSM' });
                     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' });
-                    const ignScan = L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg', { maxZoom: 18, attribution: '© IGN' });
+                    
+                    // URL IGN optimisée et corrigée
+                    const ignScan = L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg', {
+                        maxZoom: 18,
+                        minZoom: 2,
+                        attribution: '&copy; IGN'
+                    });
 
                     map = L.map('map', { layers: [planOSM] }).setView([lat, lng], 17);
                     L.control.layers({ "Plan OSM": planOSM, "IGN Topo": ignScan, "Satellite": satellite }).addTo(map);
