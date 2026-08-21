@@ -20,11 +20,11 @@
             --border-color: #333;
         }
         body.night-mode {
-            --bg-color: #050000;
-            --panel-bg: #1a0000;
-            --text-color: #ff4444;
-            --accent-color: #990000;
-            --border-color: #500000;
+            --bg-color: #0d0000;
+            --panel-bg: #1a0303;
+            --text-color: #ff3333;
+            --accent-color: #8b0000;
+            --border-color: #400000;
         }
         body, html {
             margin: 0;
@@ -38,9 +38,21 @@
         #map {
             height: calc(100vh - 210px);
             width: 100%;
+            position: relative;
         }
-        body.night-mode .leaflet-tile-pane {
-            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg);
+        #map-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: calc(100vh - 210px);
+            background-color: rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+        body.night-mode #map-overlay {
+            display: block;
         }
         #panel {
             height: 210px;
@@ -94,6 +106,7 @@
 <body id="body-main">
 
     <div id="map"></div>
+    <div id="map-overlay"></div>
 
     <div id="panel">
         <div id="status">📍 Initialisation du GPS...</div>
@@ -111,7 +124,7 @@
         </div>
 
         <div style="font-size: 10px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les angles (Milliés / Degrés) et enregistrer vos favoris.</i>
+            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les angles (Milliés / Degrés) et gérer vos favoris.</i>
         </div>
     </div>
 
@@ -146,7 +159,7 @@
         }
 
         function calculerDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Rayon de la terre en mètres
+            const R = 6371e3;
             const φ1 = lat1 * Math.PI/180;
             const φ2 = lat2 * Math.PI/180;
             const Δφ = (lat2-lat1) * Math.PI/180;
@@ -184,84 +197,51 @@
                 }
 
                 if (!map) {
-                    const plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        maxZoom: 19,
-                        attribution: '© OpenStreetMap'
-                    });
+                    const plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSM' });
+                    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' });
 
-                    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                        maxZoom: 19,
-                        attribution: '© Esri'
-                    });
-
-                    map = L.map('map', {
-                        layers: [plan]
-                    }).setView([lat, lng], 17);
-
-                    const baseMaps = { "Plan": plan, "Satellite": satellite };
-                    L.control.layers(baseMaps).addTo(map);
+                    map = L.map('map', { layers: [plan] }).setView([lat, lng], 17);
+                    L.control.layers({ "Plan": plan, "Satellite": satellite }).addTo(map);
 
                     map.on('click', async function(e) {
                         const clickLat = e.latlng.lat;
                         const clickLng = e.latlng.lng;
                         let clickMgrs = "";
-                        try {
-                            clickMgrs = mgrs.forward([clickLng, clickLat], 5);
-                        } catch (err) {
-                            clickMgrs = "Coordonnée complexe";
-                        }
+                        try { clickMgrs = mgrs.forward([clickLng, clickLat], 5); } catch (err) { clickMgrs = "N/A"; }
 
-                        document.getElementById('status').innerHTML = `⏳ <i>Calcul jalon...</i>`;
+                        document.getElementById('status').innerHTML = `⏳ <i>Calcul...</i>`;
                         const alt = await getAltitude(clickLat, clickLng);
                         
-                        let infoSupplementaire = "";
+                        let infoSupp = "";
                         if (cheminementPoints.length > 0) {
-                            const dernierPoint = cheminementPoints[cheminementPoints.length - 1];
-                            const dist = calculerDistance(dernierPoint.lat, dernierPoint.lng, clickLat, clickLng);
-                            const cap = calculerCaps(dernierPoint.lat, dernierPoint.lng, clickLat, clickLng);
-                            infoSupplementaire = `<br>📏 Dist: ${dist}m<br>🎯 Cap: <b>${cap.mil} ‰</b> (${cap.deg}°)`;
+                            const d = cheminementPoints[cheminementPoints.length - 1];
+                            const dist = calculerDistance(d.lat, d.lng, clickLat, clickLng);
+                            const cap = calculerCaps(d.lat, d.lng, clickLat, clickLng);
+                            infoSupp = `<br>📏 Dist: ${dist}m<br>🎯 Cap: <b>${cap.mil} ‰</b> (${cap.deg}°)`;
                         }
 
-                        const pointIndex = cheminementPoints.length;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
-                        
-                        marker.bindPopup(`
-                            <b>Jalon #${pointIndex + 1}</b><br>
-                            MGRS: ${clickMgrs}<br>
-                            Alt: ${alt}m
-                            ${infoSupplementaire}<br>
-                            <button class="btn-action" onclick="sauvegarderFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder Favori</button>
-                        `).openPopup();
+                        marker.bindPopup(`<b>Jalon #${cheminementPoints.length + 1}</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m${infoSupp}<br><button class="btn-action" onclick="sauvegarderFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder</button>`).openPopup();
                         
                         cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker, mgrs: clickMgrs });
                         mettreAJourItineraire();
-
-                        document.getElementById('status').innerHTML = `📍 <b>Jalon #${pointIndex + 1} posé</b><br><span style="font-size:10px;">${clickMgrs}</span>`;
+                        document.getElementById('status').innerHTML = `📍 <b>Point Ajouté</b>`;
                     });
                 }
 
-                if (userMarker) {
-                    map.removeLayer(userMarker);
-                    map.removeLayer(circle);
-                }
-
-                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position GPS</b><br>MGRS: ${mgrsCoord}`).openPopup();
+                if (userMarker) { map.removeLayer(userMarker); map.removeLayer(circle); }
+                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
-
-                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b> (~${Math.round(accuracy)}m)<br><span style="font-size:11px;">${mgrsCoord}</span>`;
+                document.getElementById('status').innerHTML = `📍 <b>GPS OK</b> (~${Math.round(accuracy)}m)`;
                 mettreAJourAffichageFavoris();
 
-            }, error => {
-                document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b> : Vérifiez les permissions.`;
-            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            }, error => { document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b>`; }, { enableHighAccuracy: true });
         }
 
         function mettreAJourItineraire() {
             const latLngs = cheminementPoints.map(p => [p.lat, p.lng]);
             if (polylineRoute) map.removeLayer(polylineRoute);
-            if (latLngs.length > 1) {
-                polylineRoute = L.polyline(latLngs, { color: 'blue', weight: 4 }).addTo(map);
-            }
+            if (latLngs.length > 1) polylineRoute = L.polyline(latLngs, { color: 'blue', weight: 4 }).addTo(map);
         }
 
         function effacerPoints() {
@@ -275,51 +255,34 @@
             favoris.push({ lat, lng, mgrs: mgrsText, date: new Date().toLocaleDateString() });
             localStorage.setItem('tactical_favs', JSON.stringify(favoris));
             mettreAJourAffichageFavoris();
-            alert(`Point enregistré dans les favoris !\n${mgrsText}`);
+            alert(`Favori sauvegardé !`);
         }
 
-        function mettreAJourAffichageFavoris() {
-            document.getElementById('fav-count').innerText = favoris.length;
-        }
+        function mettreAJourAffichageFavoris() { document.getElementById('fav-count').innerText = favoris.length; }
 
         function voirFavoris() {
-            if (favoris.length === 0) {
-                alert("Aucun favori enregistré pour l'instant.");
-                return;
-            }
-            let texte = "Vos Favoris:\n";
-            favoris.forEach((f, index) => {
-                texte += `${index + 1}. ${f.mgrs} (${f.date})\n`;
-            });
-            const choix = prompt(texte + "\nEntrez le numéro du favori à centrer sur la carte :");
-            if (choix && !isNaN(choix)) {
-                const index = parseInt(choix) - 1;
-                if (favoris[index]) {
-                    map.setView([favoris[index].lat, favoris[index].lng], 17);
-                    L.marker([favoris[index].lat, favoris[index].lng]).addTo(map).bindPopup(`<b>⭐ Favori</b><br>${favoris[index].mgrs}`).openPopup();
-                }
+            if (favoris.length === 0) { alert("Aucun favori."); return; }
+            let t = "Vos Favoris:\n";
+            favoris.forEach((f, i) => t += `${i + 1}. ${f.mgrs}\n`);
+            const choix = prompt(t + "\nEntrez le numéro du favori à centrer :");
+            if (choix && favoris[parseInt(choix)-1]) {
+                const f = favoris[parseInt(choix)-1];
+                map.setView([f.lat, f.lng], 17);
+                L.marker([f.lat, f.lng]).addTo(map).bindPopup(`<b>⭐ Favori</b><br>${f.mgrs}`).openPopup();
             }
         }
 
-        function centrerSurGPS() {
-            navigator.geolocation.getCurrentPosition(position => {
-                map.setView([position.coords.latitude, position.coords.longitude], 17);
-            });
-        }
+        function centrerSurGPS() { navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 17)); }
 
         function rechercherMGRS() {
             const val = document.getElementById('mgrsSearchInput').value.trim();
-            if (!val) return;
             try {
                 const latLon = mgrs.inverse(val);
                 if (searchMarker) map.removeLayer(searchMarker);
                 searchMarker = L.marker([latLon[1], latLon[0]]).addTo(map);
                 map.setView([latLon[1], latLon[0]], 17);
-                searchMarker.bindPopup(`<b>Recherche MGRS</b><br>${val.toUpperCase()}`).openPopup();
-                document.getElementById('status').innerHTML = `🔍 <b>Trouvé :</b> ${val.toUpperCase()}`;
-            } catch (err) {
-                alert("Code MGRS invalide ou format incorrect !");
-            }
+                searchMarker.bindPopup(`<b>Trouvé :</b> ${val}`).openPopup();
+            } catch (err) { alert("Format MGRS invalide !"); }
         }
 
         function basculerModeNuit() {
@@ -327,12 +290,7 @@
             document.getElementById('body-main').classList.toggle('night-mode', isNightMode);
         }
 
-        window.onload = function() {
-            initialiserCarte();
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('./sw.js');
-            }
-        };
+        window.onload = function() { initialiserCarte(); };
     </script>
 </body>
 </html>
