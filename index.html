@@ -127,7 +127,7 @@
         </div>
 
         <div style="font-size: 10px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps et gérer vos données.</i>
+            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps et partager vos positions.</i>
         </div>
     </div>
 
@@ -137,7 +137,6 @@
     <script src="https://cdn.jsdelivr.net/npm/mgrs@1.0.0/dist/mgrs.min.js"></script>
 
     <script>
-        // Enregistrement du Service Worker pour le mode Hors-Ligne
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
@@ -234,11 +233,13 @@
                         const pointIndex = cheminementPoints.length + 1;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
                         
+                        // Popup enrichi avec un bouton "📋 Copier MGRS" pour le partage immédiat
                         marker.bindPopup(`
                             <b>Jalon #${pointIndex}</b><br>
-                            MGRS: ${clickMgrs}<br>
+                            MGRS: <span id="mgrs_txt_${pointIndex}">${clickMgrs}</span><br>
                             Alt: ${alt}m${infoSupp}<br>
-                            <div style="margin-top:6px; border-top:1px solid #ccc; padding-top:4px;">
+                            <button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${clickMgrs}')">📋 Copier MGRS</button><br>
+                            <div style="margin-top:4px; border-top:1px solid #ccc; padding-top:4px;">
                                 <input type="number" id="rayonInput_${pointIndex}" placeholder="Rayon (m)" value="500" style="width:70px; padding:2px;">
                                 <button class="btn-action" onclick="ajouterCercleSurJalon(${clickLat}, ${clickLng}, ${pointIndex})">🎯 Zone</button>
                             </div>
@@ -252,12 +253,21 @@
                 }
 
                 if (userMarker) { map.removeLayer(userMarker); map.removeLayer(circle); }
-                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}`).openPopup();
+                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}<br><button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${mgrsCoord}')">📋 Copier MGRS</button>`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
                 document.getElementById('status').innerHTML = `📍 <b>GPS OK</b>`;
                 afficherFavorisSurCarte();
                 mettreAJourAffichageFavoris();
             }, error => { document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b>`; }, { enableHighAccuracy: true });
+        }
+
+        // --- FONCTION DE COPIE RAPIDE POUR PARTAGE ---
+        function copierMGRS(texteMGRS) {
+            navigator.clipboard.writeText(texteMGRS).then(() => {
+                document.getElementById('status').innerHTML = `📋 <b>Copié : ${texteMGRS}</b>`;
+            }).catch(err => {
+                alert("Erreur lors de la copie : " + texteMGRS);
+            });
         }
 
         function ajouterCercleSurJalon(lat, lng, pointIndex) {
@@ -282,7 +292,7 @@
             favorisMarkers = [];
             favoris.forEach((f, index) => {
                 const favMarker = L.marker([f.lat, f.lng], { title: f.nom }).addTo(map);
-                favMarker.bindPopup(`<b>⭐ ${f.nom}</b><br>MGRS: ${f.mgrs}<br><button class="btn-action" style="background:#d73a49;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>`);
+                favMarker.bindPopup(`<b>⭐ ${f.nom}</b><br>MGRS: ${f.mgrs}<br><button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${f.mgrs}')">📋 Copier MGRS</button><br><button class="btn-action" style="background:#d73a49; margin-top:4px;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>`);
                 favorisMarkers.push(favMarker);
             });
         }
@@ -331,7 +341,6 @@
         function voirFavoris() {
             if (favoris.length === 0) return alert("Aucun favori.");
             let t = "Favoris :\n";
-            favoris.export?.forEach ? "" : null;
             favoris.forEach((f, i) => t += `${i + 1}. ${f.nom}\n`);
             const choix = prompt(t + "\nNuméro du favori à centrer :");
             if (choix) {
@@ -343,11 +352,8 @@
             }
         }
 
-        // --- EXPORT GEOJSON ---
         function exporterGeoJSON() {
             let features = [];
-
-            // 1. Ajouter les jalons du tracé en cours
             cheminementPoints.forEach((p, index) => {
                 features.push({
                     type: "Feature",
@@ -355,8 +361,6 @@
                     properties: { type: "Jalon", name: `Jalon #${index + 1}`, mgrs: p.mgrs }
                 });
             });
-
-            // 2. Ajouter la ligne de cheminement si elle existe
             if (cheminementPoints.length > 1) {
                 features.push({
                     type: "Feature",
@@ -364,8 +368,6 @@
                     properties: { type: "Itineraire", name: "Tracé tactique" }
                 });
             }
-
-            // 3. Ajouter les favoris enregistrés
             favoris.forEach(f => {
                 features.push({
                     type: "Feature",
@@ -376,37 +378,30 @@
 
             const geojsonCollection = { type: "FeatureCollection", features: features };
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geojsonCollection, null, 2));
-            
             const downloadAnchor = document.createElement('a');
             downloadAnchor.setAttribute("href", dataStr);
             downloadAnchor.setAttribute("download", "tactical_export.geojson");
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
-
             document.getElementById('status').innerHTML = `💾 <b>Export réussi (.geojson)</b>`;
         }
 
-        // --- IMPORT GEOJSON ---
         function importerGeoJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const geojson = JSON.parse(e.target.result);
                     let importedCount = 0;
-
                     if (geojson.features) {
                         geojson.features.forEach(feat => {
                             if (feat.geometry && feat.geometry.type === "Point") {
-                                const coords = feat.geometry.coordinates; // [lng, lat]
+                                const coords = feat.geometry.coordinates;
                                 const props = feat.properties || {};
                                 const nom = props.name || "Point importé";
                                 const mgrsText = props.mgrs || "";
-
-                                // Si c'est un favori ou un jalon, on l'ajoute aux favoris et sur la carte
                                 favoris.push({ lat: coords[1], lng: coords[0], mgrs: mgrsText, nom: nom });
                                 importedCount++;
                             }
@@ -414,14 +409,9 @@
                         localStorage.setItem('tactical_favs', JSON.stringify(favoris));
                         afficherFavorisSurCarte();
                         mettreAJourAffichageFavoris();
-                        document.getElementById('status').innerHTML = `📂 <b>${importedCount} éléments importés avec succès !</b>`;
-                    } else {
-                        alert("Format GeoJSON invalide.");
+                        document.getElementById('status').innerHTML = `📂 <b>${importedCount} éléments importés !</b>`;
                     }
-                } catch (err) {
-                    alert("Erreur lors de la lecture du fichier JSON.");
-                }
-                // Reset l'input file pour permettre de re-sélectionner le même fichier si besoin
+                } catch (err) { alert("Erreur lecture fichier."); }
                 event.target.value = "";
             };
             reader.readAsText(file);
