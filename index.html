@@ -124,7 +124,7 @@
         </div>
 
         <div style="font-size: 10px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les angles (Milliés / Degrés) et gérer vos favoris.</i>
+            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps et enregistrer vos favoris.</i>
         </div>
     </div>
 
@@ -140,6 +140,7 @@
         let searchMarker = null;
         let cheminementPoints = [];
         let polylineRoute = null;
+        let favorisMarkers = [];
         let isNightMode = false;
         let favoris = JSON.parse(localStorage.getItem('tactical_favs')) || [];
 
@@ -220,28 +221,51 @@
                             infoSupp = `<br>📏 Dist: ${dist}m<br>🎯 Cap: <b>${cap.mil} ‰</b> (${cap.deg}°)`;
                         }
 
+                        const pointIndex = cheminementPoints.length + 1;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
-                        marker.bindPopup(`<b>Jalon #${cheminementPoints.length + 1}</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m${infoSupp}<br><button class="btn-action" onclick="sauvegarderFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder</button>`).openPopup();
+                        
+                        // Popup avec option de sauvegarde en favori
+                        marker.bindPopup(`<b>Jalon #${pointIndex}</b><br>MGRS: ${clickMgrs}<br>Alt: ${alt}m${infoSupp}<br><button class="btn-action" onclick="sauvegarderFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder en Favori</button>`).openPopup();
                         
                         cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker, mgrs: clickMgrs });
                         mettreAJourItineraire();
-                        document.getElementById('status').innerHTML = `📍 <b>Point Ajouté</b>`;
+                        document.getElementById('status').innerHTML = `📍 <b>Jalon #${pointIndex} Ajouté</b>`;
                     });
                 }
 
                 if (userMarker) { map.removeLayer(userMarker); map.removeLayer(circle); }
                 userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
+                
                 document.getElementById('status').innerHTML = `📍 <b>GPS OK</b> (~${Math.round(accuracy)}m)`;
+                
+                afficherFavorisSurCarte();
                 mettreAJourAffichageFavoris();
 
             }, error => { document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b>`; }, { enableHighAccuracy: true });
         }
 
+        function afficherFavorisSurCarte() {
+            favorisMarkers.forEach(m => map.removeLayer(m));
+            favorisMarkers = [];
+
+            favoris.forEach((f, index) => {
+                const favMarker = L.marker([f.lat, f.lng], {
+                    title: `Favori: ${f.mgrs}`
+                }).addTo(map);
+
+                favMarker.bindPopup(`<b>⭐ Favori #${index + 1}</b><br>MGRS: ${f.mgrs}<br>Ajouté le: ${f.date || 'N/A'}<br><button class="btn-action" style="background:#d73a49;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>`);
+                
+                favorisMarkers.push(favMarker);
+            });
+        }
+
         function mettreAJourItineraire() {
             const latLngs = cheminementPoints.map(p => [p.lat, p.lng]);
             if (polylineRoute) map.removeLayer(polylineRoute);
-            if (latLngs.length > 1) polylineRoute = L.polyline(latLngs, { color: 'blue', weight: 4 }).addTo(map);
+            if (latLngs.length > 1) {
+                polylineRoute = L.polyline(latLngs, { color: '#0055ff', weight: 4, opacity: 0.8 }).addTo(map);
+            }
         }
 
         function effacerPoints() {
@@ -252,27 +276,56 @@
         }
 
         function sauvegarderFavori(lat, lng, mgrsText) {
+            const existe = favoris.some(f => f.lat === lat && f.lng === lng);
+            if (existe) {
+                alert("Ce point est déjà dans vos favoris !");
+                return;
+            }
+
             favoris.push({ lat, lng, mgrs: mgrsText, date: new Date().toLocaleDateString() });
             localStorage.setItem('tactical_favs', JSON.stringify(favoris));
+            
+            afficherFavorisSurCarte();
             mettreAJourAffichageFavoris();
-            alert(`Favori sauvegardé !`);
+            alert(`⭐ Point sauvegardé dans les favoris !`);
         }
 
-        function mettreAJourAffichageFavoris() { document.getElementById('fav-count').innerText = favoris.length; }
+        function supprimerFavori(index) {
+            favoris.splice(index, 1);
+            localStorage.setItem('tactical_favs', JSON.stringify(favoris));
+            afficherFavorisSurCarte();
+            mettreAJourAffichageFavoris();
+            map.closePopup();
+            alert("Favori supprimé.");
+        }
+
+        function mettreAJourAffichageFavoris() { 
+            document.getElementById('fav-count').innerText = favoris.length; 
+        }
 
         function voirFavoris() {
-            if (favoris.length === 0) { alert("Aucun favori."); return; }
+            if (favoris.length === 0) { 
+                alert("Aucun favori enregistré pour le moment."); 
+                return; 
+            }
             let t = "Vos Favoris:\n";
             favoris.forEach((f, i) => t += `${i + 1}. ${f.mgrs}\n`);
             const choix = prompt(t + "\nEntrez le numéro du favori à centrer :");
-            if (choix && favoris[parseInt(choix)-1]) {
-                const f = favoris[parseInt(choix)-1];
-                map.setView([f.lat, f.lng], 17);
-                L.marker([f.lat, f.lng]).addTo(map).bindPopup(`<b>⭐ Favori</b><br>${f.mgrs}`).openPopup();
+            if (choix) {
+                const index = parseInt(choix) - 1;
+                if (favoris[index] && favorisMarkers[index]) {
+                    const f = favoris[index];
+                    map.setView([f.lat, f.lng], 17);
+                    favorisMarkers[index].openPopup();
+                } else {
+                    alert("Numéro invalide.");
+                }
             }
         }
 
-        function centrerSurGPS() { navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 17)); }
+        function centrerSurGPS() { 
+            navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 17)); 
+        }
 
         function rechercherMGRS() {
             const val = document.getElementById('mgrsSearchInput').value.trim();
