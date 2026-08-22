@@ -119,6 +119,7 @@
         <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
             <button class="btn-ctrl" onclick="centrerSurGPS()">Centrer GPS</button>
             <button class="btn-ctrl" onclick="basculerModeNuit()" style="background: #444;">🌙 Mode Nuit</button>
+            <button class="btn-ctrl" id="btnMesure" onclick="basculerModeMesure()" style="background: #6f42c1;">📏 Mesurer</button>
             <button class="btn-ctrl" onclick="effacerPoints()" style="background: #d73a49;">Effacer Tracé</button>
             <button class="btn-ctrl" onclick="voirFavoris()" style="background: #d29922;">⭐ Favoris (<span id="fav-count">0</span>)</button>
             <button class="btn-ctrl" onclick="exporterGeoJSON()" style="background: #0366d6;">💾 Exporter</button>
@@ -127,7 +128,7 @@
         </div>
 
         <div style="font-size: 10px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser des jalons, calculer les caps et partager vos positions.</i>
+            💡 <i>Cliquez sur la carte pour poser des jalons, ou activez "Mesurer" pour calculer des distances à la volée.</i>
         </div>
     </div>
 
@@ -155,6 +156,12 @@
         let cerclesZones = [];
         let isNightMode = false;
         let favoris = JSON.parse(localStorage.getItem('tactical_favs')) || [];
+
+        // Variables pour l'outil de mesure à la volée
+        let modeMesureActif = false;
+        let mesurePoints = [];
+        let mesureMarkers = [];
+        let mesurePolyline = null;
 
         function calculerCaps(lat1, lon1, lat2, lon2) {
             const toRad = (deg) => (deg * Math.PI) / 180;
@@ -213,9 +220,21 @@
                     map = L.map('map', { layers: [planOSM] }).setView([lat, lng], 17);
                     L.control.layers({ "Plan OSM": planOSM, "Topo (Courbes de niveau)": topoMap, "Satellite": satellite }).addTo(map);
 
+                    // --- AJOUT DE L'ÉCHELLE MÉTRIQUE OFFICIELLE ---
+                    L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
+
+                    // Gestionnaire unique des clics sur la carte
                     map.on('click', async function(e) {
                         const clickLat = e.latlng.lat;
                         const clickLng = e.latlng.lng;
+
+                        // Si le mode mesure est actif, on gère la règle de distance
+                        if (modeMesureActif) {
+                            gererClicMesure(clickLat, clickLng);
+                            return;
+                        }
+
+                        // Mode normal : Ajout de jalon tactique
                         let clickMgrs = "";
                         try { clickMgrs = mgrs.forward([clickLng, clickLat], 5); } catch (err) { clickMgrs = "N/A"; }
 
@@ -260,6 +279,57 @@
             }, error => { document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b>`; }, { enableHighAccuracy: true });
         }
 
+        // --- OUTIL DE MESURE À LA VOLÉE ---
+        function basculerModeMesure() {
+            modeMesureActif = !modeMesureActif;
+            const btn = document.getElementById('btnMesure');
+            if (modeMesureActif) {
+                btn.style.background = "#d73a49";
+                btn.innerText = "🛑 Quitter Mesure";
+                document.getElementById('status').innerHTML = `📏 <b>Mode Mesure Actif :</b> Cliquez sur 2 points de la carte.`;
+                effacerMesure();
+            } else {
+                btn.style.background = "#6f42c1";
+                btn.innerText = "📏 Mesurer";
+                document.getElementById('status').innerHTML = `📏 Mode mesure désactivé.`;
+                effacerMesure();
+            }
+        }
+
+        function gererClicMesure(lat, lng) {
+            const marker = L.circleMarker([lat, lng], { radius: 6, color: '#ff00ff', fillColor: '#ff00ff', fillOpacity: 1 }).addTo(map);
+            mesureMarkers.push(marker);
+            mesurePoints.push({ lat, lng });
+
+            if (mesurePoints.length === 1) {
+                document.getElementById('status').innerHTML = `📏 Point 1 posé. Cliquez sur le second point.`;
+            } else if (mesurePoints.length === 2) {
+                const p1 = mesurePoints[0];
+                const p2 = mesurePoints[1];
+                const dist = calculerDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+                const cap = calculerCaps(p1.lat, p1.lng, p2.lat, p2.lng);
+
+                mesurePolyline = L.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], { color: '#ff00ff', weight: 4, dashArray: '5, 5' }).addTo(map);
+                
+                marker.bindPopup(`<b>Mesure</b><br>📏 Distance : <b>${dist}m</b><br>🎯 Cap : <b>${cap.mil} ‰</b> (${cap.deg}°)`).openPopup();
+                document.getElementById('status').innerHTML = `📏 <b>Distance : ${dist}m | Cap : ${cap.mil} ‰ (${cap.deg}°)</b>`;
+            } else {
+                // Réinitialisation automatique pour une nouvelle mesure si on clique une 3ème fois
+                effacerMesure();
+                gererClicMesure(lat, lng);
+            }
+        }
+
+        function effacerMesure() {
+            mesureMarkers.forEach(m => map.removeLayer(m));
+            mesureMarkers = [];
+            mesurePoints = [];
+            if (mesurePolyline) {
+                map.removeLayer(mesurePolyline);
+                mesurePolyline = null;
+            }
+        }
+
         function copierMGRS(texteMGRS) {
             navigator.clipboard.writeText(texteMGRS).then(() => {
                 document.getElementById('status').innerHTML = `📋 <b>Copié : ${texteMGRS}</b>`;
@@ -285,14 +355,12 @@
             document.getElementById('status').innerHTML = `🎯 <b>Zone de ${rayon}m ajoutée</b>`;
         }
 
-        // --- AFFICHAGE MIS À JOUR DES FAVORIS (AVEC MGRS ET TÉLÉPORTATION) ---
         function afficherFavorisSurCarte() {
             favorisMarkers.forEach(m => map.removeLayer(m));
             favorisMarkers = [];
             favoris.forEach((f, index) => {
                 const favMarker = L.marker([f.lat, f.lng], { title: f.nom }).addTo(map);
                 
-                // Popup complet avec le MGRS affiché, bouton de copie et bouton de suppression
                 favMarker.bindPopup(`
                     <b>⭐ ${f.nom}</b><br>
                     MGRS: ${f.mgrs}<br>
@@ -300,10 +368,11 @@
                     <button class="btn-action" style="background:#d73a49; margin-top:4px;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>
                 `);
 
-                // Clic direct sur le marqueur favori sur la carte -> Téléportation / centrage
                 favMarker.on('click', function() {
-                    map.setView([f.lat, f.lng], 17);
-                    document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${f.nom}</b>`;
+                    if (!modeMesureActif) {
+                        map.setView([f.lat, f.lng], 17);
+                        document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${f.nom}</b>`;
+                    }
                 });
 
                 favorisMarkers.push(favMarker);
@@ -324,7 +393,8 @@
             cerclesZones.forEach(c => map.removeLayer(c));
             cerclesZones = [];
 
-            document.getElementById('status').innerHTML = `🗑️ Tracé et zones effacés.`;
+            effacerMesure();
+            document.getElementById('status').innerHTML = `🗑️ Tracé et mesures effacés.`;
         }
 
         function demanderNomFavori(lat, lng, mgrsText) {
@@ -352,7 +422,6 @@
 
         function mettreAJourAffichageFavoris() { document.getElementById('fav-count').innerText = favoris.length; }
 
-        // --- MENU DE SÉLECTION RAPIDE DES FAVORIS (TÉLÉPORTATION) ---
         function voirFavoris() {
             if (favoris.length === 0) return alert("Aucun favori enregistré.");
             let t = "Liste des Favoris :\n";
@@ -361,7 +430,6 @@
             if (choix) {
                 const index = parseInt(choix) - 1;
                 if (favoris[index] && favorisMarkers[index]) {
-                    // Téléportation de la caméra sur le favori choisi
                     map.setView([favoris[index].lat, favoris[index].lng], 17);
                     favorisMarkers[index].openPopup();
                     document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${favoris[index].nom}</b>`;
