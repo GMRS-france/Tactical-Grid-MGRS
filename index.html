@@ -233,10 +233,9 @@
                         const pointIndex = cheminementPoints.length + 1;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
                         
-                        // Popup enrichi avec un bouton "📋 Copier MGRS" pour le partage immédiat
                         marker.bindPopup(`
                             <b>Jalon #${pointIndex}</b><br>
-                            MGRS: <span id="mgrs_txt_${pointIndex}">${clickMgrs}</span><br>
+                            MGRS: ${clickMgrs}<br>
                             Alt: ${alt}m${infoSupp}<br>
                             <button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${clickMgrs}')">📋 Copier MGRS</button><br>
                             <div style="margin-top:4px; border-top:1px solid #ccc; padding-top:4px;">
@@ -261,7 +260,6 @@
             }, error => { document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b>`; }, { enableHighAccuracy: true });
         }
 
-        // --- FONCTION DE COPIE RAPIDE POUR PARTAGE ---
         function copierMGRS(texteMGRS) {
             navigator.clipboard.writeText(texteMGRS).then(() => {
                 document.getElementById('status').innerHTML = `📋 <b>Copié : ${texteMGRS}</b>`;
@@ -287,12 +285,27 @@
             document.getElementById('status').innerHTML = `🎯 <b>Zone de ${rayon}m ajoutée</b>`;
         }
 
+        // --- AFFICHAGE MIS À JOUR DES FAVORIS (AVEC MGRS ET TÉLÉPORTATION) ---
         function afficherFavorisSurCarte() {
             favorisMarkers.forEach(m => map.removeLayer(m));
             favorisMarkers = [];
             favoris.forEach((f, index) => {
                 const favMarker = L.marker([f.lat, f.lng], { title: f.nom }).addTo(map);
-                favMarker.bindPopup(`<b>⭐ ${f.nom}</b><br>MGRS: ${f.mgrs}<br><button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${f.mgrs}')">📋 Copier MGRS</button><br><button class="btn-action" style="background:#d73a49; margin-top:4px;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>`);
+                
+                // Popup complet avec le MGRS affiché, bouton de copie et bouton de suppression
+                favMarker.bindPopup(`
+                    <b>⭐ ${f.nom}</b><br>
+                    MGRS: ${f.mgrs}<br>
+                    <button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${f.mgrs}')">📋 Copier MGRS</button><br>
+                    <button class="btn-action" style="background:#d73a49; margin-top:4px;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>
+                `);
+
+                // Clic direct sur le marqueur favori sur la carte -> Téléportation / centrage
+                favMarker.on('click', function() {
+                    map.setView([f.lat, f.lng], 17);
+                    document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${f.nom}</b>`;
+                });
+
                 favorisMarkers.push(favMarker);
             });
         }
@@ -334,20 +347,26 @@
             afficherFavorisSurCarte();
             mettreAJourAffichageFavoris();
             map.closePopup();
+            document.getElementById('status').innerHTML = `🗑️ <b>Favori supprimé</b>`;
         }
 
         function mettreAJourAffichageFavoris() { document.getElementById('fav-count').innerText = favoris.length; }
 
+        // --- MENU DE SÉLECTION RAPIDE DES FAVORIS (TÉLÉPORTATION) ---
         function voirFavoris() {
-            if (favoris.length === 0) return alert("Aucun favori.");
-            let t = "Favoris :\n";
-            favoris.forEach((f, i) => t += `${i + 1}. ${f.nom}\n`);
-            const choix = prompt(t + "\nNuméro du favori à centrer :");
+            if (favoris.length === 0) return alert("Aucun favori enregistré.");
+            let t = "Liste des Favoris :\n";
+            favoris.forEach((f, i) => t += `${i + 1}. ${f.nom} (${f.mgrs})\n`);
+            const choix = prompt(t + "\nEntrez le numéro du favori pour vous y téléporter :");
             if (choix) {
                 const index = parseInt(choix) - 1;
-                if (favoris[index]) {
+                if (favoris[index] && favorisMarkers[index]) {
+                    // Téléportation de la caméra sur le favori choisi
                     map.setView([favoris[index].lat, favoris[index].lng], 17);
                     favorisMarkers[index].openPopup();
+                    document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${favoris[index].nom}</b>`;
+                } else {
+                    alert("Numéro invalide.");
                 }
             }
         }
