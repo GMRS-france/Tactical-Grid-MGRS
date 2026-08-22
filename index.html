@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tactical Grid MGRS France</title>
     
     <link rel="manifest" href="./manifest.json">
@@ -34,9 +34,10 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             transition: background 0.3s, color 0.3s;
+            overflow: hidden;
         }
         #map {
-            height: calc(100vh - 210px);
+            height: calc(100vh - 220px);
             width: 100%;
             position: relative;
         }
@@ -45,7 +46,7 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: calc(100vh - 210px);
+            height: calc(100vh - 220px);
             background-color: rgba(0, 0, 0, 0.6);
             pointer-events: none;
             z-index: 1000;
@@ -55,7 +56,7 @@
             display: block;
         }
         #panel {
-            height: 210px;
+            height: 220px;
             background: var(--panel-bg);
             padding: 8px 12px;
             box-sizing: border-box;
@@ -128,7 +129,7 @@
         </div>
 
         <div style="font-size: 10px; opacity: 0.8;">
-            💡 <i>Cliquez sur la carte pour poser des jalons, ou activez "Mesurer" pour calculer des distances à la volée.</i>
+            💡 <i>Sécurité activée, Import LineString & Points, Altitudes fiabilisées.</i>
         </div>
     </div>
 
@@ -157,11 +158,21 @@
         let isNightMode = false;
         let favoris = JSON.parse(localStorage.getItem('tactical_favs')) || [];
 
-        // Variables pour l'outil de mesure à la volée
         let modeMesureActif = false;
         let mesurePoints = [];
         let mesureMarkers = [];
         let mesurePolyline = null;
+
+        // Fonction utilitaire pour sécuriser l'affichage contre les injections HTML/XSS
+        function echapperHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
 
         function calculerCaps(lat1, lon1, lat2, lon2) {
             const toRad = (deg) => (deg * Math.PI) / 180;
@@ -173,9 +184,9 @@
             const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
             let brng = toDeg(Math.atan2(y, x));
             let azimutDeg = Math.round((brng + 360) % 360);
-            let azimutMil = Math.round((azimutDeg * 6400) / 360);
-            if (azimutMil >= 6400) azimutMil = 0;
-            return { deg: azimutDeg, mil: azimutMil };
+            let azimutMilOTAN = Math.round((azimutDeg * 6400) / 360); // Précision OTAN 6400‰
+            if (azimutMilOTAN >= 6400) azimutMilOTAN = 0;
+            return { deg: azimutDeg, mil: azimutMilOTAN };
         }
 
         function calculerDistance(lat1, lon1, lat2, lon2) {
@@ -189,13 +200,17 @@
             return Math.round(R * c);
         }
 
+        // Gestion propre de l'altitude sans faux "0 m"
         async function getAltitude(lat, lng) {
             try {
                 const response = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lng}`);
+                if (!response.ok) throw new Error("Erreur réseau");
                 const data = await response.json();
-                if (data && data.results && data.results.length > 0) return data.results[0].elevation;
+                if (data && data.results && data.results.length > 0 && data.results[0].elevation !== undefined) {
+                    return data.results[0].elevation + " m";
+                }
             } catch (e) {}
-            return 0;
+            return "Indisponible";
         }
 
         function initialiserCarte() {
@@ -220,48 +235,45 @@
                     map = L.map('map', { layers: [planOSM] }).setView([lat, lng], 17);
                     L.control.layers({ "Plan OSM": planOSM, "Topo (Courbes de niveau)": topoMap, "Satellite": satellite }).addTo(map);
 
-                    // --- AJOUT DE L'ÉCHELLE MÉTRIQUE OFFICIELLE ---
                     L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
 
-                    // Gestionnaire unique des clics sur la carte
                     map.on('click', async function(e) {
                         const clickLat = e.latlng.lat;
                         const clickLng = e.latlng.lng;
 
-                        // Si le mode mesure est actif, on gère la règle de distance
                         if (modeMesureActif) {
                             gererClicMesure(clickLat, clickLng);
                             return;
                         }
 
-                        // Mode normal : Ajout de jalon tactique
                         let clickMgrs = "";
                         try { clickMgrs = mgrs.forward([clickLng, clickLat], 5); } catch (err) { clickMgrs = "N/A"; }
 
-                        document.getElementById('status').innerHTML = `⏳ <i>Calcul...</i>`;
-                        const alt = await getAltitude(clickLat, clickLng);
+                        document.getElementById('status').innerHTML = `⏳ <i>Calcul altitude...</i>`;
+                        const altStr = await getAltitude(clickLat, clickLng);
                         
                         let infoSupp = "";
                         if (cheminementPoints.length > 0) {
                             const d = cheminementPoints[cheminementPoints.length - 1];
                             const dist = calculerDistance(d.lat, d.lng, clickLat, clickLng);
                             const cap = calculerCaps(d.lat, d.lng, clickLat, clickLng);
-                            infoSupp = `<br>📏 Dist: ${dist}m<br>🎯 Cap: <b>${cap.mil} ‰</b> (${cap.deg}°)`;
+                            infoSupp = `<br>📏 Dist: ${dist}m<br>🎯 Cap: <b>${cap.mil} ‰ (OTAN)</b> (${cap.deg}°)`;
                         }
 
                         const pointIndex = cheminementPoints.length + 1;
                         const marker = L.marker([clickLat, clickLng]).addTo(map);
                         
+                        const safeMgrs = echapperHtml(clickMgrs);
                         marker.bindPopup(`
                             <b>Jalon #${pointIndex}</b><br>
-                            MGRS: ${clickMgrs}<br>
-                            Alt: ${alt}m${infoSupp}<br>
-                            <button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${clickMgrs}')">📋 Copier MGRS</button><br>
+                            MGRS: ${safeMgrs}<br>
+                            Alt: ${altStr}${infoSupp}<br>
+                            <button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${safeMgrs}')">📋 Copier MGRS</button><br>
                             <div style="margin-top:4px; border-top:1px solid #ccc; padding-top:4px;">
                                 <input type="number" id="rayonInput_${pointIndex}" placeholder="Rayon (m)" value="500" style="width:70px; padding:2px;">
                                 <button class="btn-action" onclick="ajouterCercleSurJalon(${clickLat}, ${clickLng}, ${pointIndex})">🎯 Zone</button>
                             </div>
-                            <button class="btn-action" style="background:#d29922; margin-top:4px;" onclick="demanderNomFavori(${clickLat}, ${clickLng}, '${clickMgrs}')">⭐ Sauvegarder</button>
+                            <button class="btn-action" style="background:#d29922; margin-top:4px;" onclick="demanderNomFavori(${clickLat}, ${clickLng}, '${safeMgrs}')">⭐ Sauvegarder</button>
                         `).openPopup();
                         
                         cheminementPoints.push({ lat: clickLat, lng: clickLng, marker: marker, mgrs: clickMgrs });
@@ -271,7 +283,8 @@
                 }
 
                 if (userMarker) { map.removeLayer(userMarker); map.removeLayer(circle); }
-                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${mgrsCoord}<br><button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${mgrsCoord}')">📋 Copier MGRS</button>`).openPopup();
+                const safeUserMgrs = echapperHtml(mgrsCoord);
+                userMarker = L.marker([lat, lng]).addTo(map).bindPopup(`<b>Votre Position</b><br>MGRS: ${safeUserMgrs}<br><button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${safeUserMgrs}')">📋 Copier MGRS</button>`).openPopup();
                 circle = L.circle([lat, lng], { radius: accuracy, color: '#0f0', fillColor: '#0f0', fillOpacity: 0.15 }).addTo(map);
                 document.getElementById('status').innerHTML = `📍 <b>GPS OK</b>`;
                 afficherFavorisSurCarte();
@@ -279,14 +292,13 @@
             }, error => { document.getElementById('status').innerHTML = `⚠️ <b>Erreur GPS</b>`; }, { enableHighAccuracy: true });
         }
 
-        // --- OUTIL DE MESURE À LA VOLÉE ---
         function basculerModeMesure() {
             modeMesureActif = !modeMesureActif;
             const btn = document.getElementById('btnMesure');
             if (modeMesureActif) {
                 btn.style.background = "#d73a49";
                 btn.innerText = "🛑 Quitter Mesure";
-                document.getElementById('status').innerHTML = `📏 <b>Mode Mesure Actif :</b> Cliquez sur 2 points de la carte.`;
+                document.getElementById('status').innerHTML = `📏 <b>Mode Mesure Actif :</b> Cliquez sur 2 points.`;
                 effacerMesure();
             } else {
                 btn.style.background = "#6f42c1";
@@ -311,10 +323,9 @@
 
                 mesurePolyline = L.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], { color: '#ff00ff', weight: 4, dashArray: '5, 5' }).addTo(map);
                 
-                marker.bindPopup(`<b>Mesure</b><br>📏 Distance : <b>${dist}m</b><br>🎯 Cap : <b>${cap.mil} ‰</b> (${cap.deg}°)`).openPopup();
-                document.getElementById('status').innerHTML = `📏 <b>Distance : ${dist}m | Cap : ${cap.mil} ‰ (${cap.deg}°)</b>`;
+                marker.bindPopup(`<b>Mesure</b><br>📏 Distance : <b>${dist}m</b><br>🎯 Cap : <b>${cap.mil} ‰ (OTAN)</b> (${cap.deg}°)`).openPopup();
+                document.getElementById('status').innerHTML = `📏 <b>Distance : ${dist}m | Cap : ${cap.mil} ‰ OTAN (${cap.deg}°)</b>`;
             } else {
-                // Réinitialisation automatique pour une nouvelle mesure si on clique une 3ème fois
                 effacerMesure();
                 gererClicMesure(lat, lng);
             }
@@ -334,7 +345,7 @@
             navigator.clipboard.writeText(texteMGRS).then(() => {
                 document.getElementById('status').innerHTML = `📋 <b>Copié : ${texteMGRS}</b>`;
             }).catch(err => {
-                alert("Erreur lors de la copie : " + texteMGRS);
+                alert("Erreur lors de la copie.");
             });
         }
 
@@ -361,17 +372,20 @@
             favoris.forEach((f, index) => {
                 const favMarker = L.marker([f.lat, f.lng], { title: f.nom }).addTo(map);
                 
+                const safeNom = echapperHtml(f.nom);
+                const safeMgrs = echapperHtml(f.mgrs);
+
                 favMarker.bindPopup(`
-                    <b>⭐ ${f.nom}</b><br>
-                    MGRS: ${f.mgrs}<br>
-                    <button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${f.mgrs}')">📋 Copier MGRS</button><br>
+                    <b>⭐ ${safeNom}</b><br>
+                    MGRS: ${safeMgrs}<br>
+                    <button class="btn-action" style="background:#2ea44f;" onclick="copierMGRS('${safeMgrs}')">📋 Copier MGRS</button><br>
                     <button class="btn-action" style="background:#d73a49; margin-top:4px;" onclick="supprimerFavori(${index})">🗑️ Supprimer</button>
                 `);
 
                 favMarker.on('click', function() {
                     if (!modeMesureActif) {
                         map.setView([f.lat, f.lng], 17);
-                        document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${f.nom}</b>`;
+                        document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${safeNom}</b>`;
                     }
                 });
 
@@ -408,7 +422,7 @@
             afficherFavorisSurCarte();
             mettreAJourAffichageFavoris();
             map.closePopup();
-            document.getElementById('status').innerHTML = `⭐ <b>Favori "${nom}" sauvegardé</b>`;
+            document.getElementById('status').innerHTML = `⭐ <b>Favori "${echapperHtml(nom)}" sauvegardé</b>`;
         }
 
         function supprimerFavori(index) {
@@ -432,7 +446,7 @@
                 if (favoris[index] && favorisMarkers[index]) {
                     map.setView([favoris[index].lat, favoris[index].lng], 17);
                     favorisMarkers[index].openPopup();
-                    document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${favoris[index].nom}</b>`;
+                    document.getElementById('status').innerHTML = `🎯 <b>Téléporté sur : ${echapperHtml(favoris[index].nom)}</b>`;
                 } else {
                     alert("Numéro invalide.");
                 }
@@ -474,6 +488,7 @@
             document.getElementById('status').innerHTML = `💾 <b>Export réussi (.geojson)</b>`;
         }
 
+        // --- IMPORT GEOJSON CORRIGÉ (Points + LineString intégrales) ---
         function importerGeoJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -481,24 +496,61 @@
             reader.onload = function(e) {
                 try {
                     const geojson = JSON.parse(e.target.result);
-                    let importedCount = 0;
+                    let importedPointsCount = 0;
+                    let importedLinesCount = 0;
+
                     if (geojson.features) {
                         geojson.features.forEach(feat => {
-                            if (feat.geometry && feat.geometry.type === "Point") {
-                                const coords = feat.geometry.coordinates;
+                            if (feat.geometry) {
                                 const props = feat.properties || {};
-                                const nom = props.name || "Point importé";
-                                const mgrsText = props.mgrs || "";
-                                favoris.push({ lat: coords[1], lng: coords[0], mgrs: mgrsText, nom: nom });
-                                importedCount++;
+                                
+                                // Gestion des points (Jalons ou Favoris)
+                                if (feat.geometry.type === "Point") {
+                                    const coords = feat.geometry.coordinates; // [lng, lat]
+                                    const lat = coords[1];
+                                    const lng = coords[0];
+                                    const nom = props.name || "Point importé";
+                                    const mgrsText = props.mgrs || "";
+
+                                    // Si c'est un jalon ou un favori, on l'ajoute aux favoris/points selon le type ou par défaut aux favoris
+                                    if (props.type === "Jalon") {
+                                        const pointIndex = cheminementPoints.length + 1;
+                                        const marker = L.marker([lat, lng]).addTo(map);
+                                        const safeMgrs = echapperHtml(mgrsText);
+                                        marker.bindPopup(`<b>Jalon Importé #${pointIndex}</b><br>MGRS: ${safeMgrs}`);
+                                        cheminementPoints.push({ lat, lng, marker, mgrs: mgrsText });
+                                    } else {
+                                        // Favori par défaut
+                                        favoris.push({ lat, lng, mgrs: mgrsText, nom: nom });
+                                    }
+                                    importedPointsCount++;
+                                } 
+                                // Gestion de la LineString (Itinéraire tracé)
+                                else if (feat.geometry.type === "LineString") {
+                                    const coordinates = feat.geometry.coordinates; // Array de [lng, lat]
+                                    coordinates.forEach(coord => {
+                                        const lng = coord[0];
+                                        const lat = coord[1];
+                                        let clickMgrs = "";
+                                        try { clickMgrs = mgrs.forward([lng, lat], 5); } catch(err) {}
+                                        
+                                        const marker = L.marker([lat, lng]).addTo(map);
+                                        cheminementPoints.push({ lat, lng, marker, mgrs: clickMgrs });
+                                    });
+                                    importedLinesCount++;
+                                }
                             }
                         });
+
                         localStorage.setItem('tactical_favs', JSON.stringify(favoris));
                         afficherFavorisSurCarte();
                         mettreAJourAffichageFavoris();
-                        document.getElementById('status').innerHTML = `📂 <b>${importedCount} éléments importés !</b>`;
+                        mettreAJourItineraire();
+                        document.getElementById('status').innerHTML = `📂 <b>Import réussi : ${importedPointsCount} points, ${importedLinesCount} lignes !</b>`;
                     }
-                } catch (err) { alert("Erreur lecture fichier."); }
+                } catch (err) { 
+                    alert("Erreur lors de la lecture du fichier GeoJSON."); 
+                }
                 event.target.value = "";
             };
             reader.readAsText(file);
@@ -513,6 +565,7 @@
                 if (searchMarker) map.removeLayer(searchMarker);
                 searchMarker = L.marker([latLon[1], latLon[0]]).addTo(map);
                 map.setView([latLon[1], latLon[0]], 17);
+                document.getElementById('status').innerHTML = `🔍 <b>Recherche MGRS localisée</b>`;
             } catch (err) { alert("Format MGRS invalide !"); }
         }
 
